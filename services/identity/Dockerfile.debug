@@ -1,0 +1,45 @@
+# Debug Dockerfile with Delve debugger
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+# Install build dependencies and Delve debugger
+RUN apk add --no-cache git ca-certificates
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build with debug symbols (no optimization, no inlining)
+RUN CGO_ENABLED=0 GOOS=linux go build -gcflags="all=-N -l" -o /app/service ./cmd/server
+
+# Final stage
+FROM alpine:3.19
+
+WORKDIR /app
+
+RUN apk --no-cache add ca-certificates tzdata
+
+# Copy binary and delve
+COPY --from=builder /app/service .
+COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /go/bin/dlv /usr/local/bin/dlv
+
+# Create non-root user
+RUN adduser -D -g '' appuser
+USER appuser
+
+# Expose ports: HTTP, gRPC, Delve debugger
+EXPOSE 8080 9090 40000
+
+# Start with Delve debugger
+# --listen: debugger port
+# --headless: no terminal UI
+# --api-version=2: use DAP protocol
+# --accept-multiclient: allow multiple debug sessions
+# --continue: start app immediately (don't wait for debugger)
+ENTRYPOINT ["dlv", "exec", "./service", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "--continue"]
