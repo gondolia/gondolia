@@ -1,0 +1,29 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/lib/stores/authStore";
+
+export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // Wait for hydration
+    const timer = setTimeout(() => {
+      const { tokens: storedTokens } = useAuthStore.getState();
+      if (storedTokens?.accessToken) {
+        router.replace("/dashboard");
+      } else {
+        router.replace("/login");
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [router]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+    </div>
+  );
+}

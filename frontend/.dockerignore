@@ -1,0 +1,16 @@
+# Dependencies
+node_modules
+
+# Build outputs
+.next
+out
+
+# IDE
+.idea
+.vscode
+
+# Misc
+.git
+.gitignore
+*.log
+*.md
