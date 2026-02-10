@@ -1,0 +1,36 @@
+# k3d Cluster Configuration
+# Usage: k3d cluster create --config k3d-config.yaml
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: gondolia
+servers: 1
+agents: 2
+image: rancher/k3s:v1.28.5-k3s1
+ports:
+  # Ingress HTTP (8080 to avoid collision with V2 Caddy on port 80)
+  - port: 8080:80
+    nodeFilters:
+      - loadbalancer
+  # Ingress HTTPS (8443 to avoid collision with V2 Caddy on port 443)
+  - port: 8443:443
+    nodeFilters:
+      - loadbalancer
+  # NodePort range for direct service access
+  # Note: 30000-30002 reserved for Azure tunnels (azprod, azint, azorder)
+  - port: 31000-31100:31000-31100
+    nodeFilters:
+      - server:0
+# No local registry - using GHCR (ghcr.io)
+options:
+  k3d:
+    wait: true
+    timeout: "60s"
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true

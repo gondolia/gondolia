@@ -1,0 +1,9 @@
+# Production Environment Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: production-config
+  namespace: webshop-services
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "warn"

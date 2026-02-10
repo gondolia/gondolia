@@ -1,0 +1,10 @@
+# Development Environment Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dev-config
+  namespace: webshop-services
+data:
+  ENVIRONMENT: "development"
+  LOG_LEVEL: "debug"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger-collector.observability:4317"

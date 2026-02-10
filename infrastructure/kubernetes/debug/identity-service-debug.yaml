@@ -1,0 +1,130 @@
+# Debug Deployment - extends base with debug port
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-service
+  namespace: webshop-services
+  labels:
+    app: identity-service
+    app.kubernetes.io/name: identity-service
+    app.kubernetes.io/part-of: gondolia
+    environment: debug
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identity-service
+  template:
+    metadata:
+      labels:
+        app: identity-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: identity-service
+          image: identity-service-debug
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9090
+              name: grpc
+            - containerPort: 40000
+              name: debug
+          env:
+            - name: SERVICE_NAME
+              value: "identity-service"
+            - name: HTTP_PORT
+              value: "8080"
+            - name: GRPC_PORT
+              value: "9090"
+            - name: DATABASE_HOST
+              value: "postgresql.webshop-databases.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "identity"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: identity-service-secrets
+                  key: db-user
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: identity-service-secrets
+                  key: db-password
+            - name: REDIS_HOST
+              value: "redis-master.webshop-databases.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: KAFKA_BROKERS
+              value: "webshop-kafka-kafka-bootstrap.webshop-messaging.svc.cluster.local:9092"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: identity-service-secrets
+                  key: jwt-secret
+          # More resources for debugging
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Longer timeouts for debugging
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # Security context for Delve
+          securityContext:
+            capabilities:
+              add:
+                - SYS_PTRACE
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-service
+  namespace: webshop-services
+spec:
+  selector:
+    app: identity-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+    - name: grpc
+      port: 9090
+      targetPort: 9090
+    - name: debug
+      port: 40000
+      targetPort: 40000
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: identity-service-secrets
+  namespace: webshop-services
+type: Opaque
+stringData:
+  db-user: "postgres"
+  db-password: "postgres"
+  jwt-secret: "dev-jwt-secret-change-in-production"

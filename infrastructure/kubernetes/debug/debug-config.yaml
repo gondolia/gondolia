@@ -1,0 +1,11 @@
+# Debug Environment Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: debug-config
+  namespace: webshop-services
+data:
+  ENVIRONMENT: "debug"
+  LOG_LEVEL: "debug"
+  GIN_MODE: "debug"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger-collector.observability:4317"

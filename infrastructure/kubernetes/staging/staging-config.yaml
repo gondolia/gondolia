@@ -1,0 +1,9 @@
+# Staging Environment Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: staging-config
+  namespace: webshop-services
+data:
+  ENVIRONMENT: "staging"
+  LOG_LEVEL: "info"

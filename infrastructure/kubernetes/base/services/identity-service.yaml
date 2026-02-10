@@ -1,0 +1,125 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-service
+  namespace: webshop-services
+  labels:
+    app: identity-service
+    app.kubernetes.io/name: identity-service
+    app.kubernetes.io/part-of: gondolia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identity-service
+  template:
+    metadata:
+      labels:
+        app: identity-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z postgresql.webshop-databases.svc.cluster.local 5432; do echo "Waiting for PostgreSQL..."; sleep 2; done; echo "PostgreSQL is ready!"']
+      containers:
+        - name: identity-service
+          image: identity-service
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9090
+              name: grpc
+          env:
+            - name: SERVICE_NAME
+              value: "identity-service"
+            - name: HTTP_PORT
+              value: "8080"
+            - name: GRPC_PORT
+              value: "9090"
+            - name: DATABASE_HOST
+              value: "postgresql.webshop-databases.svc.cluster.local"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "identity"
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: identity-service-secrets
+                  key: db-user
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: identity-service-secrets
+                  key: db-password
+            - name: REDIS_HOST
+              value: "redis-master.webshop-databases.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: KAFKA_BROKERS
+              value: "webshop-kafka-kafka-bootstrap.webshop-messaging.svc.cluster.local:9092"
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: identity-service-secrets
+                  key: jwt-access-secret
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: identity-service-secrets
+                  key: jwt-refresh-secret
+            - name: ALLOWED_ORIGINS
+              value: "http://localhost:3000,http://localhost,http://localhost:8080,http://10.211.55.17:8080"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-service
+  namespace: webshop-services
+spec:
+  selector:
+    app: identity-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+    - name: grpc
+      port: 9090
+      targetPort: 9090
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: identity-service-secrets
+  namespace: webshop-services
+type: Opaque
+stringData:
+  db-user: "postgres"
+  db-password: "postgres"
+  jwt-access-secret: "dev-access-secret-change-in-production-min-32-chars"
+  jwt-refresh-secret: "dev-refresh-secret-change-in-production-min-32-chars"

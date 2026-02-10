@@ -1,0 +1,28 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webshop-services
+  labels:
+    app.kubernetes.io/part-of: gondolia
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webshop-databases
+  labels:
+    app.kubernetes.io/part-of: gondolia
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webshop-messaging
+  labels:
+    app.kubernetes.io/part-of: gondolia
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webshop-monitoring
+  labels:
+    app.kubernetes.io/part-of: gondolia
