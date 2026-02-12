@@ -253,7 +253,7 @@ github.com/gondolia/gondolia-saferpay      (Public — Saferpay Provider)
 └── internal/
     └── client/
 
-github.com/mycompany/gondolia-kuratle        (Private — company-specific)
+github.com/mycompany/gondolia-acme        (Private — company-specific)
 ├── providers.go                           # Registration aller Acme-Provider
 ├── sap/                                   # SAP-Konfiguration (VKOrg, Werke, etc.)
 ├── akeneo/                                # Akeneo PIMProvider + Attribut-Mapping
@@ -1246,7 +1246,7 @@ func NewProvider(config map[string]any) (payment.PaymentProvider, error) {
 Das Private Repo importiert Provider-Packages und die `init()`-Funktionen registrieren automatisch:
 
 ```go
-// github.com/mycompany/gondolia-kuratle/providers.go
+// github.com/mycompany/gondolia-acme/providers.go
 package acme
 
 // Blank Imports registrieren alle company-specificn Provider
@@ -1255,9 +1255,9 @@ import (
     _ "github.com/gondolia/gondolia-meilisearch"  // Meilisearch SearchProvider
     _ "github.com/gondolia/gondolia-saferpay"     // Saferpay PaymentProvider
 
-    _ "github.com/mycompany/gondolia-kuratle/akeneo" // company-specificr Akeneo Provider
-    _ "github.com/mycompany/gondolia-kuratle/azure"  // Acme Azure AD Provider
-    _ "github.com/mycompany/gondolia-kuratle/ardis"  // Acme Ardis Provider
+    _ "github.com/mycompany/gondolia-acme/akeneo" // company-specific Akeneo Provider
+    _ "github.com/mycompany/gondolia-acme/azure"  // Acme Azure AD Provider
+    _ "github.com/mycompany/gondolia-acme/ardis"  // Acme Ardis Provider
 )
 ```
 
