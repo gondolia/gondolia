@@ -15,12 +15,6 @@ export interface Company {
   isActive: boolean;
 }
 
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}
-
 export interface LoginRequest {
   email: string;
   password: string;
@@ -28,7 +22,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
-  refreshToken: string;
   expiresIn: number;
   user: User;
   company: Company;

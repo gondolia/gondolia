@@ -34,6 +34,9 @@ type Config struct {
 
 	// CORS
 	AllowedOrigins []string
+
+	// Security
+	SecureCookies bool
 }
 
 func Load() (*Config, error) {
@@ -54,6 +57,7 @@ func Load() (*Config, error) {
 		JWTAccessTokenExpiry:  getDurationEnv("JWT_ACCESS_TOKEN_EXPIRY", 15*time.Minute),
 		JWTRefreshTokenExpiry: getDurationEnv("JWT_REFRESH_TOKEN_EXPIRY", 7*24*time.Hour),
 		AllowedOrigins:        getSliceEnv("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+		SecureCookies:         getBoolEnv("SECURE_COOKIES", true),
 	}
 
 	if cfg.JWTAccessSecret == "" {
@@ -103,6 +107,13 @@ func getSliceEnv(key string, defaultValue []string) []string {
 		if len(result) > 0 {
 			return result
 		}
+	}
+	return defaultValue
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	if value, exists := os.LookupEnv(key); exists {
+		return value == "true" || value == "1"
 	}
 	return defaultValue
 }

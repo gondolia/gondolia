@@ -47,7 +47,7 @@ class ApiClient {
     path: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const { tokens, logout } = useAuthStore.getState();
+    const { accessToken, logout } = useAuthStore.getState();
 
     const headers: HeadersInit = {
       "Content-Type": "application/json",
@@ -55,21 +55,21 @@ class ApiClient {
       ...options.headers,
     };
 
-    // Add auth header if we have tokens
-    if (tokens?.accessToken) {
+    // Add auth header if we have access token
+    if (accessToken) {
       (headers as Record<string, string>)["Authorization"] =
-        `Bearer ${tokens.accessToken}`;
+        `Bearer ${accessToken}`;
     }
 
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...options,
       headers,
-      credentials: "include",
+      credentials: "include", // Always include cookies
     });
 
-    // Handle 401 - try to refresh token
-    if (response.status === 401 && tokens?.refreshToken) {
-      const refreshed = await this.refreshToken(tokens.refreshToken);
+    // Handle 401 - try to refresh token via cookie
+    if (response.status === 401 && accessToken) {
+      const refreshed = await this.refreshToken();
       if (refreshed) {
         // Retry the original request with new token
         (headers as Record<string, string>)["Authorization"] =
@@ -115,9 +115,8 @@ class ApiClient {
     }
   }
 
-  private async refreshToken(refreshToken: string): Promise<{
+  private async refreshToken(): Promise<{
     accessToken: string;
-    refreshToken: string;
     expiresIn: number;
   } | null> {
     try {
@@ -127,8 +126,7 @@ class ApiClient {
           "Content-Type": "application/json",
           "X-Tenant-ID": this.tenantId,
         },
-        body: JSON.stringify({ refreshToken }),
-        credentials: "include",
+        credentials: "include", // Cookie is sent automatically
       });
 
       if (!response.ok) {
@@ -136,21 +134,20 @@ class ApiClient {
       }
 
       const data = await response.json();
-      const { setTokens } = useAuthStore.getState();
-      setTokens({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        expiresAt: Date.now() + data.expiresIn * 1000,
-      });
+      const { setAccessToken } = useAuthStore.getState();
+      setAccessToken(data.access_token, data.expires_in);
 
-      return data;
+      return {
+        accessToken: data.access_token,
+        expiresIn: data.expires_in,
+      };
     } catch {
       return null;
     }
   }
 
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    // 1. Call login endpoint to get tokens
+    // 1. Call login endpoint to get access token (refresh token is set as HttpOnly cookie)
     const response = await fetch(`${this.baseUrl}/api/v1/auth/login`, {
       method: "POST",
       headers: {
@@ -158,7 +155,7 @@ class ApiClient {
         "X-Tenant-ID": this.tenantId,
       },
       body: JSON.stringify(credentials),
-      credentials: "include",
+      credentials: "include", // Receive refresh token cookie
     });
 
     if (!response.ok) {
@@ -166,10 +163,9 @@ class ApiClient {
       throw error;
     }
 
-    // API returns snake_case
+    // API returns snake_case (only access token in body now)
     const tokenData = await response.json();
     const accessToken = tokenData.access_token;
-    const refreshToken = tokenData.refresh_token;
     const expiresIn = tokenData.expires_in;
 
     // 2. Fetch user info with the new token
@@ -191,7 +187,6 @@ class ApiClient {
 
     return {
       accessToken,
-      refreshToken,
       expiresIn,
       user: mapApiUser(meData.user, meData.role, meData.permissions),
       company: mapApiCompany(meData.company),
@@ -200,6 +195,7 @@ class ApiClient {
 
   async logout(): Promise<void> {
     try {
+      // Server will clear the refresh token cookie
       await this.request<void>("/api/v1/auth/logout", {
         method: "POST",
       });

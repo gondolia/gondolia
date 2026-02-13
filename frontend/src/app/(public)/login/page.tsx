@@ -47,11 +47,8 @@ export default function LoginPage() {
         response.user,
         response.company,
         [response.company],
-        {
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-          expiresAt: Date.now() + response.expiresIn * 1000,
-        }
+        response.accessToken,
+        response.expiresIn
       );
 
       router.push("/dashboard");

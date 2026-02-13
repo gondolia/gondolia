@@ -1,14 +1,14 @@
 "use client";
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import type { User, Company, AuthTokens } from "@/types";
+import type { User, Company } from "@/types";
 
 interface AuthState {
   user: User | null;
   company: Company | null;
   availableCompanies: Company[];
-  tokens: AuthTokens | null;
+  accessToken: string | null;
+  tokenExpiresAt: number | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 
@@ -17,9 +17,10 @@ interface AuthState {
     user: User,
     company: Company,
     availableCompanies: Company[],
-    tokens: AuthTokens
+    accessToken: string,
+    expiresIn: number
   ) => void;
-  setTokens: (tokens: AuthTokens) => void;
+  setAccessToken: (accessToken: string, expiresIn: number) => void;
   setUser: (user: User) => void;
   setCompany: (company: Company) => void;
   setLoading: (loading: boolean) => void;
@@ -27,71 +28,62 @@ interface AuthState {
   isTokenExpired: () => boolean;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
+  user: null,
+  company: null,
+  availableCompanies: [],
+  accessToken: null,
+  tokenExpiresAt: null,
+  isAuthenticated: false,
+  isLoading: true,
+
+  setAuth: (user, company, availableCompanies, accessToken, expiresIn) => {
+    set({
+      user,
+      company,
+      availableCompanies,
+      accessToken,
+      tokenExpiresAt: Date.now() + expiresIn * 1000,
+      isAuthenticated: true,
+      isLoading: false,
+    });
+  },
+
+  setAccessToken: (accessToken, expiresIn) => {
+    set({
+      accessToken,
+      tokenExpiresAt: Date.now() + expiresIn * 1000,
+    });
+  },
+
+  setUser: (user) => {
+    set({ user });
+  },
+
+  setCompany: (company) => {
+    set({ company });
+  },
+
+  setLoading: (loading) => {
+    set({ isLoading: loading });
+  },
+
+  logout: () => {
+    set({
       user: null,
       company: null,
       availableCompanies: [],
-      tokens: null,
+      accessToken: null,
+      tokenExpiresAt: null,
       isAuthenticated: false,
-      isLoading: true,
+      isLoading: false,
+    });
+  },
 
-      setAuth: (user, company, availableCompanies, tokens) => {
-        set({
-          user,
-          company,
-          availableCompanies,
-          tokens,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-      },
-
-      setTokens: (tokens) => {
-        set({ tokens });
-      },
-
-      setUser: (user) => {
-        set({ user });
-      },
-
-      setCompany: (company) => {
-        set({ company });
-      },
-
-      setLoading: (loading) => {
-        set({ isLoading: loading });
-      },
-
-      logout: () => {
-        set({
-          user: null,
-          company: null,
-          availableCompanies: [],
-          tokens: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
-      },
-
-      isTokenExpired: () => {
-        const { tokens } = get();
-        if (!tokens) return true;
-        // Add 30 second buffer
-        return Date.now() >= tokens.expiresAt - 30000;
-      },
-    }),
-    {
-      name: "auth-storage",
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        tokens: state.tokens,
-        user: state.user,
-        company: state.company,
-        availableCompanies: state.availableCompanies,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    }
-  )
-);
+  isTokenExpired: () => {
+    const { tokenExpiresAt } = get();
+    if (!tokenExpiresAt) return true;
+    // Add 30 second buffer
+    return Date.now() >= tokenExpiresAt - 30000;
+  },
+}));

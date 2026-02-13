@@ -78,7 +78,7 @@ func main() {
 	roleService := service.NewRoleService(roleRepo)
 
 	// Initialize handlers
-	authHandler := handler.NewAuthHandler(authService, userService)
+	authHandler := handler.NewAuthHandler(authService, userService, cfg)
 	userHandler := handler.NewUserHandler(userService)
 	companyHandler := handler.NewCompanyHandler(companyService)
 	roleHandler := handler.NewRoleHandler(roleService)

@@ -12,7 +12,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, tokens, setAuth, setLoading, logout } = useAuthStore();
+  const { isAuthenticated, accessToken, setAuth, setLoading, logout } = useAuthStore();
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
@@ -20,24 +20,27 @@ export default function AuthLayout({
       // Wait for hydration
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      const { tokens: storedTokens, isAuthenticated: isAuth } = useAuthStore.getState();
+      const { accessToken: storedToken, isAuthenticated: isAuth } = useAuthStore.getState();
 
-      if (!storedTokens?.accessToken) {
-        setLoading(false);
-        router.replace("/login");
-        return;
-      }
-
-      // If we have tokens but no user info, fetch it
-      if (storedTokens && !isAuth) {
+      // No access token means user needs to login
+      // Refresh token is in HttpOnly cookie, so we'll try to get user info
+      // and if that fails (401), the client will auto-refresh via cookie
+      if (!storedToken && !isAuth) {
         try {
+          // Try to get user info - this will auto-refresh if cookie exists
           const me = await apiClient.getMe();
-          setAuth(
-            me.user,
-            me.company,
-            me.availableCompanies,
-            storedTokens
-          );
+          const { accessToken: newToken, tokenExpiresAt } = useAuthStore.getState();
+          
+          if (newToken && tokenExpiresAt) {
+            const expiresIn = Math.floor((tokenExpiresAt - Date.now()) / 1000);
+            setAuth(
+              me.user,
+              me.company,
+              me.availableCompanies,
+              newToken,
+              expiresIn
+            );
+          }
         } catch {
           logout();
           router.replace("/login");
@@ -60,7 +63,7 @@ export default function AuthLayout({
     );
   }
 
-  if (!isAuthenticated && !tokens) {
+  if (!isAuthenticated && !accessToken) {
     return null;
   }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/gondolia/gondolia/services/identity/internal/config"
 	"github.com/gondolia/gondolia/services/identity/internal/domain"
 	"github.com/gondolia/gondolia/services/identity/internal/middleware"
 	"github.com/gondolia/gondolia/services/identity/internal/service"
@@ -15,13 +16,15 @@ import (
 type AuthHandler struct {
 	authService *service.AuthService
 	userService *service.UserService
+	config      *config.Config
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(authService *service.AuthService, userService *service.UserService) *AuthHandler {
+func NewAuthHandler(authService *service.AuthService, userService *service.UserService, cfg *config.Config) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		userService: userService,
+		config:      cfg,
 	}
 }
 
@@ -61,23 +64,32 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, tokens)
+	// Set refresh token as HttpOnly cookie
+	h.setRefreshTokenCookie(c, tokens.RefreshToken)
+
+	// Return only access token in response body
+	c.JSON(http.StatusOK, gin.H{
+		"access_token": tokens.AccessToken,
+		"token_type":   tokens.TokenType,
+		"expires_in":   tokens.ExpiresIn,
+	})
 }
 
 // Logout handles user logout
 func (h *AuthHandler) Logout(c *gin.Context) {
-	var req domain.RefreshRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	// Read refresh token from cookie
+	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil || refreshToken == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
-				"code":    "VALIDATION_ERROR",
-				"message": err.Error(),
+				"code":    "MISSING_TOKEN",
+				"message": "refresh token not found",
 			},
 		})
 		return
 	}
 
-	if err := h.authService.Logout(c.Request.Context(), req.RefreshToken); err != nil {
+	if err := h.authService.Logout(c.Request.Context(), refreshToken); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
 				"code":    "LOGOUT_FAILED",
@@ -87,17 +99,21 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
+	// Clear refresh token cookie
+	h.clearRefreshTokenCookie(c)
+
 	c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 }
 
 // Refresh handles token refresh
 func (h *AuthHandler) Refresh(c *gin.Context) {
-	var req domain.RefreshRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+	// Read refresh token from cookie
+	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil || refreshToken == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": gin.H{
-				"code":    "VALIDATION_ERROR",
-				"message": err.Error(),
+				"code":    "MISSING_TOKEN",
+				"message": "refresh token not found",
 			},
 		})
 		return
@@ -106,7 +122,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	ipAddress := middleware.GetClientIP(c)
 	userAgent := c.GetHeader("User-Agent")
 
-	tokens, err := h.authService.RefreshToken(c.Request.Context(), req.RefreshToken, ipAddress, userAgent)
+	tokens, err := h.authService.RefreshToken(c.Request.Context(), refreshToken, ipAddress, userAgent)
 	if err != nil {
 		status := http.StatusUnauthorized
 		c.JSON(status, gin.H{
@@ -118,7 +134,15 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, tokens)
+	// Set new refresh token as HttpOnly cookie
+	h.setRefreshTokenCookie(c, tokens.RefreshToken)
+
+	// Return only access token in response body
+	c.JSON(http.StatusOK, gin.H{
+		"access_token": tokens.AccessToken,
+		"token_type":   tokens.TokenType,
+		"expires_in":   tokens.ExpiresIn,
+	})
 }
 
 // Me returns current user with context
@@ -173,7 +197,15 @@ func (h *AuthHandler) SwitchCompany(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, tokens)
+	// Set refresh token as HttpOnly cookie
+	h.setRefreshTokenCookie(c, tokens.RefreshToken)
+
+	// Return only access token in response body
+	c.JSON(http.StatusOK, gin.H{
+		"access_token": tokens.AccessToken,
+		"token_type":   tokens.TokenType,
+		"expires_in":   tokens.ExpiresIn,
+	})
 }
 
 // ForgotPassword initiates password reset
@@ -309,4 +341,35 @@ func (h *AuthHandler) AcceptInvitation(c *gin.Context) {
 // parseUUID parses a UUID from string with error handling
 func parseUUID(s string) (uuid.UUID, error) {
 	return uuid.Parse(s)
+}
+
+// setRefreshTokenCookie sets the refresh token as HttpOnly cookie
+func (h *AuthHandler) setRefreshTokenCookie(c *gin.Context, token string) {
+	maxAge := int(h.config.JWTRefreshTokenExpiry.Seconds())
+
+	c.SetCookie(
+		"refresh_token",           // name
+		token,                     // value
+		maxAge,                    // max age in seconds (7 days)
+		"/api/v1/auth",            // path - only sent to auth endpoints
+		"",                        // domain - empty means current domain
+		h.config.SecureCookies,    // secure - only HTTPS (configurable for dev)
+		true,                      // httpOnly - not accessible via JavaScript
+	)
+
+	// Set SameSite=Strict via SetSameSite
+	c.SetSameSite(http.SameSiteStrictMode)
+}
+
+// clearRefreshTokenCookie clears the refresh token cookie
+func (h *AuthHandler) clearRefreshTokenCookie(c *gin.Context) {
+	c.SetCookie(
+		"refresh_token",
+		"",
+		-1, // max age -1 deletes the cookie
+		"/api/v1/auth",
+		"",
+		h.config.SecureCookies,
+		true,
+	)
 }
