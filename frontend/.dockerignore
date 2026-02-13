@@ -14,3 +14,4 @@ out
 .gitignore
 *.log
 *.md
+!.env.production

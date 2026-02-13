@@ -17,6 +17,7 @@ COPY services/identity/ ./services/identity/
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/service ./services/identity/cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/migrate ./services/identity/cmd/migrate
 
 # Runtime stage
 FROM alpine:3.19
@@ -26,8 +27,9 @@ WORKDIR /app
 # Install ca-certificates for HTTPS
 RUN apk --no-cache add ca-certificates tzdata
 
-# Copy binary from builder
+# Copy binaries from builder
 COPY --from=builder /app/service .
+COPY --from=builder /app/migrate .
 
 # Copy migrations
 COPY --from=builder /app/services/identity/migrations ./migrations
