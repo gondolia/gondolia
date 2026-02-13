@@ -1,20 +1,22 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
 # Install dependencies
 RUN apk add --no-cache git ca-certificates
 
-# Copy go mod files
+# Copy go mod files (from repo root)
 COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY . .
+COPY pkg/ ./pkg/
+COPY provider/ ./provider/
+COPY services/identity/ ./services/identity/
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/service ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/service ./services/identity/cmd/server
 
 # Runtime stage
 FROM alpine:3.19
@@ -27,8 +29,8 @@ RUN apk --no-cache add ca-certificates tzdata
 # Copy binary from builder
 COPY --from=builder /app/service .
 
-# Copy migrations (if any)
-COPY --from=builder /app/migrations ./migrations
+# Copy migrations
+COPY --from=builder /app/services/identity/migrations ./migrations
 
 # Create non-root user
 RUN adduser -D -g '' appuser
