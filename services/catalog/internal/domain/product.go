@@ -130,11 +130,12 @@ type UpdateProductRequest struct {
 
 // ProductFilter represents filter options for listing products
 type ProductFilter struct {
-	TenantID    uuid.UUID
-	CategoryID  *uuid.UUID
-	Status      *ProductStatus
-	Search      *string // Searches in SKU, name
-	SKUs        []string
-	Limit       int
-	Offset      int
+	TenantID        uuid.UUID
+	CategoryID      *uuid.UUID
+	IncludeChildren bool   // Include products from child categories
+	Status          *ProductStatus
+	Search          *string // Searches in SKU, name
+	SKUs            []string
+	Limit           int
+	Offset          int
 }

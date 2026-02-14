@@ -25,7 +25,7 @@ func NewPriceHandler(priceService *service.PriceService) *PriceHandler {
 
 // ListByProduct handles GET /products/:productId/prices
 func (h *PriceHandler) ListByProduct(c *gin.Context) {
-	productID, err := uuid.Parse(c.Param("productId"))
+	productID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
@@ -62,7 +62,7 @@ func (h *PriceHandler) ListByProduct(c *gin.Context) {
 func (h *PriceHandler) Create(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	
-	productID, err := uuid.Parse(c.Param("productId"))
+	productID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
