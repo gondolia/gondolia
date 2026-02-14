@@ -79,3 +79,6 @@ export interface ApiResponse<T> {
   data?: T;
   error?: ApiError;
 }
+
+// Re-export catalog types
+export * from "./catalog";

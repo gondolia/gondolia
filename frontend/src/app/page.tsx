@@ -10,8 +10,8 @@ export default function Home() {
   useEffect(() => {
     // Wait for hydration
     const timer = setTimeout(() => {
-      const { tokens: storedTokens } = useAuthStore.getState();
-      if (storedTokens?.accessToken) {
+      const { accessToken } = useAuthStore.getState();
+      if (accessToken) {
         router.replace("/dashboard");
       } else {
         router.replace("/login");
