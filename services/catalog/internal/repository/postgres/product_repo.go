@@ -54,9 +54,28 @@ func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilte
 	conditions = append(conditions, "deleted_at IS NULL")
 
 	if filter.CategoryID != nil {
-		conditions = append(conditions, fmt.Sprintf("$%d = ANY(category_ids)", argNum))
-		args = append(args, *filter.CategoryID)
-		argNum++
+		if filter.IncludeChildren {
+			// Use recursive CTE to get all descendant categories
+			conditions = append(conditions, fmt.Sprintf(`
+				EXISTS (
+					WITH RECURSIVE child_categories AS (
+						SELECT id FROM categories WHERE id = $%d AND deleted_at IS NULL
+						UNION ALL
+						SELECT c.id FROM categories c
+						INNER JOIN child_categories cc ON c.parent_id = cc.id
+						WHERE c.deleted_at IS NULL
+					)
+					SELECT 1 FROM child_categories cc WHERE cc.id = ANY(category_ids)
+				)
+			`, argNum))
+			args = append(args, *filter.CategoryID)
+			argNum++
+		} else {
+			// Only direct category match
+			conditions = append(conditions, fmt.Sprintf("$%d = ANY(category_ids)", argNum))
+			args = append(args, *filter.CategoryID)
+			argNum++
+		}
 	}
 
 	if filter.Status != nil {

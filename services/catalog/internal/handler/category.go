@@ -14,12 +14,14 @@ import (
 // CategoryHandler handles category endpoints
 type CategoryHandler struct {
 	categoryService *service.CategoryService
+	productService  *service.ProductService
 }
 
 // NewCategoryHandler creates a new category handler
-func NewCategoryHandler(categoryService *service.CategoryService) *CategoryHandler {
+func NewCategoryHandler(categoryService *service.CategoryService, productService *service.ProductService) *CategoryHandler {
 	return &CategoryHandler{
 		categoryService: categoryService,
+		productService:  productService,
 	}
 }
 
@@ -246,4 +248,83 @@ func (h *CategoryHandler) Delete(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// GetProducts handles GET /categories/:id/products
+func (h *CategoryHandler) GetProducts(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	categoryID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid category ID",
+			},
+		})
+		return
+	}
+
+	// Verify category exists
+	_, err = h.categoryService.GetByID(c.Request.Context(), categoryID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		if domain.IsNotFoundError(err) {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		}
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"code":    code,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	filter := domain.ProductFilter{
+		TenantID:        tenantID,
+		CategoryID:      &categoryID,
+		IncludeChildren: c.Query("include_children") == "true",
+		Limit:           50,
+		Offset:          0,
+	}
+
+	// Parse query parameters
+	if c.Query("status") != "" {
+		status := domain.ProductStatus(c.Query("status"))
+		filter.Status = &status
+	}
+
+	if c.Query("search") != "" {
+		search := c.Query("search")
+		filter.Search = &search
+	}
+
+	// Pagination
+	if limit := parseInt(c.Query("limit"), 50); limit > 0 {
+		filter.Limit = limit
+	}
+	if offset := parseInt(c.Query("offset"), 0); offset >= 0 {
+		filter.Offset = offset
+	}
+
+	products, total, err := h.productService.List(c.Request.Context(), filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":   products,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
 }

@@ -59,10 +59,31 @@ func (r *CategoryRepository) GetTree(ctx context.Context, tenantID uuid.UUID) ([
 			FROM categories c
 			INNER JOIN category_tree ct ON c.parent_id = ct.id
 			WHERE c.deleted_at IS NULL
+		),
+		-- Get all child category IDs for each category (including self)
+		category_descendants AS (
+			SELECT id, id as descendant_id
+			FROM category_tree
+			
+			UNION ALL
+			
+			SELECT cd.id, ct.id as descendant_id
+			FROM category_descendants cd
+			INNER JOIN category_tree ct ON ct.parent_id = cd.descendant_id
+		),
+		-- Count products for each category including descendants
+		category_product_counts AS (
+			SELECT cd.id as category_id,
+			       COUNT(DISTINCT p.id)::int as product_count
+			FROM category_descendants cd
+			LEFT JOIN products p ON cd.descendant_id = ANY(p.category_ids) AND p.deleted_at IS NULL
+			GROUP BY cd.id
 		)
-		SELECT id, tenant_id, code, parent_id, name, sort_order, active,
-		       pim_code, last_synced_at, created_at, updated_at, deleted_at
-		FROM category_tree
+		SELECT ct.id, ct.tenant_id, ct.code, ct.parent_id, ct.name, ct.sort_order, ct.active,
+		       ct.pim_code, ct.last_synced_at, ct.created_at, ct.updated_at, ct.deleted_at,
+		       COALESCE(cpc.product_count, 0) as product_count
+		FROM category_tree ct
+		LEFT JOIN category_product_counts cpc ON ct.id = cpc.category_id
 		ORDER BY depth, sort_order, code
 	`
 
@@ -74,7 +95,7 @@ func (r *CategoryRepository) GetTree(ctx context.Context, tenantID uuid.UUID) ([
 
 	var categories []domain.Category
 	for rows.Next() {
-		category, err := r.scanCategoryFromRows(rows)
+		category, err := r.scanCategoryWithCountFromRows(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -124,15 +145,37 @@ func (r *CategoryRepository) List(ctx context.Context, filter domain.CategoryFil
 		return nil, 0, err
 	}
 
-	// Data query
+	// Data query with product counts
 	query := fmt.Sprintf(`
-		SELECT id, tenant_id, code, parent_id, name, sort_order, active,
-		       pim_code, last_synced_at, created_at, updated_at, deleted_at
-		FROM categories
+		WITH RECURSIVE child_categories AS (
+			-- Start with the filtered categories
+			SELECT id, parent_id
+			FROM categories
+			WHERE %s
+			
+			UNION ALL
+			
+			-- Get all descendants
+			SELECT c.id, c.parent_id
+			FROM categories c
+			INNER JOIN child_categories cc ON c.parent_id = cc.id
+			WHERE c.deleted_at IS NULL
+		)
+		SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.sort_order, c.active,
+		       c.pim_code, c.last_synced_at, c.created_at, c.updated_at, c.deleted_at,
+		       COALESCE((
+		           SELECT COUNT(*)::int
+		           FROM products p
+		           WHERE EXISTS (
+		               SELECT 1 FROM child_categories cc
+		               WHERE cc.id = ANY(p.category_ids)
+		           ) AND p.deleted_at IS NULL
+		       ), 0) as product_count
+		FROM categories c
 		WHERE %s
-		ORDER BY sort_order, code
+		ORDER BY c.sort_order, c.code
 		LIMIT $%d OFFSET $%d
-	`, whereClause, argNum, argNum+1)
+	`, whereClause, whereClause, argNum, argNum+1)
 
 	args = append(args, filter.Limit, filter.Offset)
 
@@ -144,7 +187,7 @@ func (r *CategoryRepository) List(ctx context.Context, filter domain.CategoryFil
 
 	var categories []domain.Category
 	for rows.Next() {
-		category, err := r.scanCategoryFromRows(rows)
+		category, err := r.scanCategoryWithCountFromRows(rows)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -312,6 +355,40 @@ func (r *CategoryRepository) scanCategoryFromRows(rows pgx.Rows) (*domain.Catego
 		&category.CreatedAt,
 		&category.UpdatedAt,
 		&category.DeletedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal JSON fields
+	_ = json.Unmarshal(nameJSON, &category.Name)
+
+	if category.Name == nil {
+		category.Name = make(map[string]string)
+	}
+
+	return &category, nil
+}
+
+func (r *CategoryRepository) scanCategoryWithCountFromRows(rows pgx.Rows) (*domain.Category, error) {
+	var category domain.Category
+	var nameJSON []byte
+
+	err := rows.Scan(
+		&category.ID,
+		&category.TenantID,
+		&category.Code,
+		&category.ParentID,
+		&nameJSON,
+		&category.SortOrder,
+		&category.Active,
+		&category.PIMCode,
+		&category.LastSyncedAt,
+		&category.CreatedAt,
+		&category.UpdatedAt,
+		&category.DeletedAt,
+		&category.ProductCount,
 	)
 
 	if err != nil {

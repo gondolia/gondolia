@@ -25,6 +25,9 @@ type Category struct {
 
 	// Loaded relations (not always populated)
 	Children []Category `json:"children,omitempty"`
+	
+	// Computed fields
+	ProductCount int `json:"product_count,omitempty"`
 }
 
 // GetLocalizedName returns the name in the specified locale or fallback
