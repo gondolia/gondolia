@@ -28,7 +28,7 @@ REGISTRY := ghcr.io/gondolia/gondolia
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Service list
-SERVICES := identity
+SERVICES := identity catalog
 
 # --- Testing ---
 

@@ -27,6 +27,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -69,10 +70,41 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.identity.rule=PathPrefix(`/api/`) || PathPrefix(`/health/`)"
+      - "traefik.http.routers.identity.rule=PathPrefix(`/api/v1/auth`) || PathPrefix(`/api/v1/users`) || PathPrefix(`/api/v1/companies`) || PathPrefix(`/api/v1/roles`)"
       - "traefik.http.routers.identity.entrypoints=web"
       - "traefik.http.services.identity.loadbalancer.server.port=8080"
-      - "traefik.http.routers.identity.priority=10"
+      - "traefik.http.routers.identity.priority=20"
+
+  catalog:
+    build:
+      context: .
+      dockerfile: services/catalog/Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: catalog-service
+      HTTP_PORT: "8081"
+      GRPC_PORT: "9091"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: catalog
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      ALLOWED_ORIGINS: "*"
+      PIM_PROVIDER: mock
+      SEARCH_PROVIDER: mock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.catalog.rule=PathPrefix(`/api/v1/products`) || PathPrefix(`/api/v1/categories`) || PathPrefix(`/api/v1/prices`) || PathPrefix(`/api/v1/search`) || PathPrefix(`/api/v1/sync`)"
+      - "traefik.http.routers.catalog.entrypoints=web"
+      - "traefik.http.services.catalog.loadbalancer.server.port=8081"
+      - "traefik.http.routers.catalog.priority=20"
 
   frontend:
     image: node:20-alpine
