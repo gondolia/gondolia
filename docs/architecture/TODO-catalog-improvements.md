@@ -60,6 +60,33 @@ Stand: 2026-02-14
 
 ---
 
+## 5. Frontend: Attribut-Namen übersetzen auf Produktdetailseite
+
+**Problem:** Auf der Produktdetailseite werden die technischen Attribut-Keys angezeigt (z.B. `thickness_mm`, `max_pressure`) statt übersetzte Labels (z.B. "Dicke", "Max. Druck").
+
+**Lösung:**
+- Option A: Attribut-Definitionen mit i18n-Labels im Backend pflegen (eigene Entität)
+- Option B: Frontend-seitiges Mapping (Key → Label) als Übergangslösung
+- Langfristig: Attribute als eigene Entität mit Name (multilingual), Einheit, Typ
+
+**Impact:** UX — aktuell für Endbenutzer unbrauchbar.
+
+---
+
+## 6. Frontend: Breadcrumbs zeigen keine Kategorie-Hierarchie
+
+**Problem:** Auf der Kategorie-Detailseite zeigen die Breadcrumbs nicht die vollständige Hierarchie. Z.B. bei "Platten" fehlt der Pfad "Kategorien > Industriebedarf > Platten" — es wird nur "Kategorien > Platten" angezeigt.
+
+**Lösung:**
+- Beim Laden einer Kategorie den Pfad bis zur Root-Kategorie aufbauen (über `parent_id`)
+- Breadcrumb-Komponente mit allen Ebenen rendern
+- Backend: Optional `ancestors`-Feld in der Category-Response (Array der Eltern-Kategorien)
+- Oder: Frontend baut den Pfad aus dem geladenen Kategorie-Baum
+
+**Impact:** UX + SEO — Breadcrumbs sind wichtig für Navigation und Google Structured Data.
+
+---
+
 ## Prioritäten
 
 | # | Verbesserung | Aufwand | Impact | Priorität |
@@ -68,3 +95,5 @@ Stand: 2026-02-14
 | 2 | `include_children` Parameter | Mittel | Hoch (echte Pagination) | **Hoch** |
 | 3 | Serverseitige Pagination | Klein | Mittel (nach #2 trivial) | Mittel |
 | 4 | Lazy Loading | Mittel | Niedrig (UX) | Niedrig |
+| 5 | Attribut-Namen i18n | Mittel | Hoch (UX) | **Hoch** |
+| 6 | Breadcrumbs Kategorie-Hierarchie | Klein | Hoch (UX/SEO) | **Hoch** |
