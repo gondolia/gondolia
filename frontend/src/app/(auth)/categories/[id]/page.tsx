@@ -16,6 +16,7 @@ export default function CategoryDetailPage() {
   const categoryId = params.id as string;
 
   const [category, setCategory] = useState<Category | null>(null);
+  const [categoryChain, setCategoryChain] = useState<Category[]>([]);
   const [products, setProducts] = useState<PaginatedResponse<Product> | null>(
     null
   );
@@ -29,11 +30,34 @@ export default function CategoryDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId, currentPage]);
 
+  // Build category chain from leaf to root
+  const buildCategoryChain = async (categoryId: string): Promise<Category[]> => {
+    const chain: Category[] = [];
+    let currentId: string | undefined = categoryId;
+
+    while (currentId) {
+      try {
+        const cat = await apiClient.getCategory(currentId);
+        chain.unshift(cat); // Add to beginning
+        currentId = cat.parentId;
+      } catch (err) {
+        console.error("Failed to load parent category:", err);
+        break;
+      }
+    }
+
+    return chain;
+  };
+
   const loadCategoryDetails = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
+      // Build category chain first
+      const chain = await buildCategoryChain(categoryId);
+      setCategoryChain(chain);
+      
       // Fetch category details (including children from tree)
       const categoryData = await apiClient.getCategory(categoryId);
       
@@ -132,6 +156,17 @@ export default function CategoryDetailPage() {
         >
           Kategorien
         </Link>
+        {categoryChain.slice(0, -1).map((cat) => (
+          <span key={cat.id}>
+            <span className="mx-2">/</span>
+            <Link
+              href={`/categories/${cat.id}`}
+              className="hover:text-primary-600 dark:hover:text-primary-400"
+            >
+              {cat.name}
+            </Link>
+          </span>
+        ))}
         <span className="mx-2">/</span>
         <span className="text-gray-900 dark:text-white">{category.name}</span>
       </nav>

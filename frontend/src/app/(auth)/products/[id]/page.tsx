@@ -16,6 +16,7 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [priceScales, setPriceScales] = useState<PriceScale[]>([]);
   const [category, setCategory] = useState<Category | null>(null);
+  const [categoryChain, setCategoryChain] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -24,6 +25,25 @@ export default function ProductDetailPage() {
     loadProductDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
+
+  // Build category chain from leaf to root
+  const buildCategoryChain = async (categoryId: string): Promise<Category[]> => {
+    const chain: Category[] = [];
+    let currentId: string | undefined = categoryId;
+
+    while (currentId) {
+      try {
+        const cat = await apiClient.getCategory(currentId);
+        chain.unshift(cat); // Add to beginning
+        currentId = cat.parentId;
+      } catch (err) {
+        console.error("Failed to load parent category:", err);
+        break;
+      }
+    }
+
+    return chain;
+  };
 
   const loadProductDetails = async () => {
     setIsLoading(true);
@@ -38,13 +58,12 @@ export default function ProductDetailPage() {
       setProduct(productData);
       setPriceScales(pricesData);
 
-      // Load category if available
+      // Load category chain if available
       if (productData.categoryId) {
         try {
-          const categoryData = await apiClient.getCategory(
-            productData.categoryId
-          );
-          setCategory(categoryData);
+          const chain = await buildCategoryChain(productData.categoryId);
+          setCategoryChain(chain);
+          setCategory(chain[chain.length - 1] || null);
         } catch (err) {
           console.error("Failed to load category:", err);
         }
@@ -132,17 +151,17 @@ export default function ProductDetailPage() {
         >
           Produkte
         </Link>
-        {category && (
-          <>
+        {categoryChain.map((cat) => (
+          <span key={cat.id}>
             <span className="mx-2">/</span>
             <Link
-              href={`/products?category=${category.id}`}
+              href={`/products?category=${cat.id}`}
               className="hover:text-primary-600 dark:hover:text-primary-400"
             >
-              {category.name}
+              {cat.name}
             </Link>
-          </>
-        )}
+          </span>
+        ))}
         <span className="mx-2">/</span>
         <span className="text-gray-900 dark:text-white">{product.name}</span>
       </nav>
