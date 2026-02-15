@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient } from "@/lib/api/client";
-import type { Product, PriceScale, Category } from "@/types/catalog";
+import type { Product, PriceScale, Category, AxisOption } from "@/types/catalog";
 import { Panel, PanelHeader, PanelBody } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
+import { VariantSelector } from "@/components/catalog/VariantSelector";
 
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const productId = params.id as string;
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -20,11 +22,40 @@ export default function ProductDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  
+  // Variant state
+  const [selectedAxisValues, setSelectedAxisValues] = useState<Record<string, string>>({});
+  const [availableAxisValues, setAvailableAxisValues] = useState<Record<string, AxisOption[]>>({});
+  const [selectedVariant, setSelectedVariant] = useState<Product | null>(null);
+  const [isLoadingVariant, setIsLoadingVariant] = useState(false);
 
   useEffect(() => {
     loadProductDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
+
+  // Load available axis values when selection changes
+  useEffect(() => {
+    if (product?.productType === 'variant_parent' && Object.keys(selectedAxisValues).length > 0) {
+      loadAvailableAxisValues();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAxisValues]);
+
+  // Try to select variant when all axes are selected
+  useEffect(() => {
+    if (product?.productType === 'variant_parent' && product.variantAxes) {
+      const allAxesSelected = product.variantAxes.every(
+        (axis) => selectedAxisValues[axis.attributeCode]
+      );
+      if (allAxesSelected) {
+        selectVariant();
+      } else {
+        setSelectedVariant(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAxisValues]);
 
   // Build category chain from leaf to root
   const buildCategoryChain = async (categoryId: string): Promise<Category[]> => {
@@ -50,13 +81,14 @@ export default function ProductDetailPage() {
     setError(null);
 
     try {
-      const [productData, pricesData] = await Promise.all([
-        apiClient.getProduct(productId),
-        apiClient.getProductPrices(productId),
-      ]);
-
+      const productData = await apiClient.getProduct(productId);
       setProduct(productData);
-      setPriceScales(pricesData);
+
+      // Load prices (only for simple or variant products, not variant_parent)
+      if (productData.productType !== 'variant_parent') {
+        const pricesData = await apiClient.getProductPrices(productId);
+        setPriceScales(pricesData);
+      }
 
       // Load category chain if available
       if (productData.categoryId) {
@@ -68,12 +100,71 @@ export default function ProductDetailPage() {
           console.error("Failed to load category:", err);
         }
       }
+
+      // Initialize variant selection from URL params if present
+      if (productData.productType === 'variant_parent') {
+        const initialSelection: Record<string, string> = {};
+        const variantSku = searchParams.get('variant');
+        
+        if (variantSku && productData.variants) {
+          // Find variant by SKU and pre-select its axis values
+          const variant = productData.variants.find(v => v.sku === variantSku);
+          if (variant) {
+            Object.assign(initialSelection, variant.axisValues);
+          }
+        }
+        
+        setSelectedAxisValues(initialSelection);
+      }
     } catch (err) {
       const error = err as { message?: string };
       setError(error.message || "Fehler beim Laden des Produkts");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadAvailableAxisValues = async () => {
+    if (!product) return;
+    
+    try {
+      const result = await apiClient.getAvailableAxisValues(productId, selectedAxisValues);
+      setAvailableAxisValues(result.available);
+    } catch (err) {
+      console.error("Failed to load available axis values:", err);
+    }
+  };
+
+  const selectVariant = async () => {
+    if (!product) return;
+    
+    setIsLoadingVariant(true);
+    try {
+      const variant = await apiClient.selectVariant(productId, selectedAxisValues);
+      setSelectedVariant(variant);
+      
+      // Load prices for the selected variant
+      const pricesData = await apiClient.getProductPrices(variant.id);
+      setPriceScales(pricesData);
+      
+      // Update URL with variant SKU (for sharing/bookmarking)
+      const url = new URL(window.location.href);
+      url.searchParams.set('variant', variant.sku);
+      window.history.replaceState({}, '', url.toString());
+    } catch (err) {
+      console.error("Failed to select variant:", err);
+      setSelectedVariant(null);
+      setPriceScales([]);
+    } finally {
+      setIsLoadingVariant(false);
+    }
+  };
+
+  const handleAxisSelection = (axisCode: string, optionCode: string) => {
+    setSelectedAxisValues((prev) => ({
+      ...prev,
+      [axisCode]: optionCode,
+    }));
   };
 
   const formatPrice = (price: number, currency: string) => {
@@ -84,14 +175,63 @@ export default function ProductDetailPage() {
   };
 
   const getCurrentPrice = () => {
-    if (!product) return null;
+    // For variant_parent without selection, show price range
+    if (product?.productType === 'variant_parent' && !selectedVariant) {
+      return null;
+    }
+
+    const displayProduct = selectedVariant || product;
+    if (!displayProduct) return null;
 
     // Find applicable price scale
     const applicableScale = priceScales
       .filter((scale) => quantity >= scale.minQuantity)
       .sort((a, b) => b.minQuantity - a.minQuantity)[0];
 
-    return applicableScale ? applicableScale.price : product.basePrice;
+    return applicableScale ? applicableScale.price : displayProduct.basePrice;
+  };
+
+  const getDisplayProduct = (): Product | null => {
+    // For variant_parent, display selected variant or parent
+    if (product?.productType === 'variant_parent') {
+      return selectedVariant || product;
+    }
+    return product;
+  };
+
+  const getDisplayImage = (): string | undefined => {
+    // If variant has its own image, use it
+    if (selectedVariant?.imageUrl) {
+      return selectedVariant.imageUrl;
+    }
+    // Otherwise use parent/product image
+    return product?.imageUrl;
+  };
+
+  const getDisplaySku = (): string | undefined => {
+    if (selectedVariant) {
+      return selectedVariant.sku;
+    }
+    return product?.sku;
+  };
+
+  const getStockInfo = (): { available: boolean; quantity: number } => {
+    if (product?.productType === 'variant_parent') {
+      if (selectedVariant) {
+        return {
+          available: selectedVariant.stockQuantity > 0,
+          quantity: selectedVariant.stockQuantity,
+        };
+      }
+      // No variant selected - check if any variant is in stock
+      const hasStock = product.variants?.some(v => v.availability?.inStock);
+      return { available: hasStock || false, quantity: 0 };
+    }
+    
+    return {
+      available: product?.stockQuantity ? product.stockQuantity > 0 : false,
+      quantity: product?.stockQuantity || 0,
+    };
   };
 
   if (isLoading) {
@@ -140,6 +280,10 @@ export default function ProductDetailPage() {
   }
 
   const currentPrice = getCurrentPrice();
+  const displayProduct = getDisplayProduct();
+  const displayImage = getDisplayImage();
+  const displaySku = getDisplaySku();
+  const stockInfo = getStockInfo();
 
   return (
     <div className="space-y-6">
@@ -170,9 +314,9 @@ export default function ProductDetailPage() {
         {/* Product Image */}
         <Panel>
           <div className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
-            {product.imageUrl ? (
+            {displayImage ? (
               <img
-                src={product.imageUrl}
+                src={displayImage}
                 alt={product.name}
                 className="w-full h-full object-contain p-8"
               />
@@ -200,7 +344,7 @@ export default function ProductDetailPage() {
         <div className="space-y-6">
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400 font-mono mb-2">
-              Artikelnummer: {product.sku}
+              Artikelnummer: {displaySku}
             </div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
               {product.name}
@@ -212,6 +356,30 @@ export default function ProductDetailPage() {
             )}
           </div>
 
+          {/* Variant Selector (only for variant_parent) */}
+          {product.productType === 'variant_parent' && product.variantAxes && (
+            <Panel>
+              <PanelHeader>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Variante wählen
+                </h2>
+              </PanelHeader>
+              <PanelBody>
+                <VariantSelector
+                  axes={product.variantAxes}
+                  selectedValues={selectedAxisValues}
+                  onSelect={handleAxisSelection}
+                  availableValues={availableAxisValues}
+                />
+                {isLoadingVariant && (
+                  <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                    Variante wird geladen...
+                  </div>
+                )}
+              </PanelBody>
+            </Panel>
+          )}
+
           {/* Price & Stock */}
           <Panel>
             <PanelBody>
@@ -220,24 +388,53 @@ export default function ProductDetailPage() {
                   <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                     Preis
                   </div>
-                  <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">
-                    {currentPrice &&
-                      formatPrice(currentPrice, product.currency)}
-                  </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    pro {product.unit}
-                  </div>
+                  {product.productType === 'variant_parent' && !selectedVariant ? (
+                    // Show price range for variant_parent
+                    product.priceRange ? (
+                      <div>
+                        <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">
+                          ab {formatPrice(product.priceRange.min, product.priceRange.currency)}
+                        </div>
+                        {product.priceRange.max !== product.priceRange.min && (
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            bis {formatPrice(product.priceRange.max, product.priceRange.currency)}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-lg text-gray-500 dark:text-gray-400">
+                        Bitte wählen Sie eine Variante
+                      </div>
+                    )
+                  ) : (
+                    // Show specific price for simple or selected variant
+                    <div>
+                      <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">
+                        {currentPrice && displayProduct &&
+                          formatPrice(currentPrice, displayProduct.currency)}
+                      </div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        pro {displayProduct?.unit || product.unit}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="text-right">
-                  {product.stockQuantity > 0 ? (
+                  {stockInfo.available ? (
                     <div>
                       <span className="inline-block px-3 py-1 text-sm font-medium text-green-800 dark:text-green-200 bg-green-100 dark:bg-green-900/30 rounded-full">
                         Auf Lager
                       </span>
-                      <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {product.stockQuantity} {product.unit} verfügbar
-                      </div>
+                      {stockInfo.quantity > 0 && (
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                          {stockInfo.quantity} {displayProduct?.unit || product.unit} verfügbar
+                        </div>
+                      )}
                     </div>
+                  ) : product.productType === 'variant_parent' && !selectedVariant ? (
+                    <span className="inline-block px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-full">
+                      Variante wählen
+                    </span>
                   ) : (
                     <span className="inline-block px-3 py-1 text-sm font-medium text-red-800 dark:text-red-200 bg-red-100 dark:bg-red-900/30 rounded-full">
                       Nicht verfügbar
@@ -287,8 +484,17 @@ export default function ProductDetailPage() {
               )}
 
               {/* Add to Cart Button (Placeholder) */}
-              <Button className="w-full mt-4" size="lg">
-                In den Warenkorb
+              <Button 
+                className="w-full mt-4" 
+                size="lg"
+                disabled={
+                  product.productType === 'variant_parent' && !selectedVariant
+                }
+              >
+                {product.productType === 'variant_parent' && !selectedVariant
+                  ? 'Bitte Variante wählen'
+                  : 'In den Warenkorb'
+                }
               </Button>
             </PanelBody>
           </Panel>

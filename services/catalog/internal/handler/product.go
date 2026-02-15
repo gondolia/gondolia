@@ -28,9 +28,10 @@ func (h *ProductHandler) List(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
 	filter := domain.ProductFilter{
-		TenantID: tenantID,
-		Limit:    50,
-		Offset:   0,
+		TenantID:        tenantID,
+		Limit:           50,
+		Offset:          0,
+		ExcludeVariants: true, // Default: show only simple + variant_parent products
 	}
 
 	// Parse query parameters

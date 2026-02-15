@@ -22,8 +22,9 @@ func NewProductRepository(db *DB) *ProductRepository {
 
 func (r *ProductRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Product, error) {
 	query := `
-		SELECT id, tenant_id, sku, name, description, category_ids, attributes, status, images,
-		       pim_identifier, last_synced_at, created_at, updated_at, deleted_at
+		SELECT id, tenant_id, product_type, parent_id, sku, name, description, category_ids, 
+		       attributes, status, images, pim_identifier, last_synced_at, 
+		       created_at, updated_at, deleted_at
 		FROM products
 		WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -33,8 +34,9 @@ func (r *ProductRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 
 func (r *ProductRepository) GetBySKU(ctx context.Context, tenantID uuid.UUID, sku string) (*domain.Product, error) {
 	query := `
-		SELECT id, tenant_id, sku, name, description, category_ids, attributes, status, images,
-		       pim_identifier, last_synced_at, created_at, updated_at, deleted_at
+		SELECT id, tenant_id, product_type, parent_id, sku, name, description, category_ids, 
+		       attributes, status, images, pim_identifier, last_synced_at, 
+		       created_at, updated_at, deleted_at
 		FROM products
 		WHERE tenant_id = $1 AND sku = $2 AND deleted_at IS NULL
 	`
@@ -52,6 +54,23 @@ func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilte
 	argNum++
 
 	conditions = append(conditions, "deleted_at IS NULL")
+
+	// Exclude variants from list (show only simple + variant_parent)
+	if filter.ExcludeVariants {
+		conditions = append(conditions, "product_type != 'variant'")
+	}
+
+	if filter.ProductType != nil {
+		conditions = append(conditions, fmt.Sprintf("product_type = $%d", argNum))
+		args = append(args, *filter.ProductType)
+		argNum++
+	}
+
+	if filter.ParentID != nil {
+		conditions = append(conditions, fmt.Sprintf("parent_id = $%d", argNum))
+		args = append(args, *filter.ParentID)
+		argNum++
+	}
 
 	if filter.CategoryID != nil {
 		if filter.IncludeChildren {
@@ -109,8 +128,9 @@ func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilte
 
 	// Data query
 	query := fmt.Sprintf(`
-		SELECT id, tenant_id, sku, name, description, category_ids, attributes, status, images,
-		       pim_identifier, last_synced_at, created_at, updated_at, deleted_at
+		SELECT id, tenant_id, product_type, parent_id, sku, name, description, category_ids, 
+		       attributes, status, images, pim_identifier, last_synced_at, 
+		       created_at, updated_at, deleted_at
 		FROM products
 		WHERE %s
 		ORDER BY sku
@@ -146,16 +166,18 @@ func (r *ProductRepository) Create(ctx context.Context, product *domain.Product)
 
 	query := `
 		INSERT INTO products (
-			id, tenant_id, sku, name, description, category_ids, attributes, status, images,
-			pim_identifier, last_synced_at, created_at, updated_at
+			id, tenant_id, product_type, parent_id, sku, name, description, category_ids, 
+			attributes, status, images, pim_identifier, last_synced_at, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 		)
 	`
 
 	_, err := r.db.Pool.Exec(ctx, query,
 		product.ID,
 		product.TenantID,
+		product.ProductType,
+		product.ParentID,
 		product.SKU,
 		nameJSON,
 		descJSON,
@@ -248,6 +270,8 @@ func (r *ProductRepository) scanProduct(row pgx.Row) (*domain.Product, error) {
 	err := row.Scan(
 		&product.ID,
 		&product.TenantID,
+		&product.ProductType,
+		&product.ParentID,
 		&product.SKU,
 		&nameJSON,
 		&descJSON,
@@ -302,6 +326,8 @@ func (r *ProductRepository) scanProductFromRows(rows pgx.Rows) (*domain.Product,
 	err := rows.Scan(
 		&product.ID,
 		&product.TenantID,
+		&product.ProductType,
+		&product.ParentID,
 		&product.SKU,
 		&nameJSON,
 		&descJSON,

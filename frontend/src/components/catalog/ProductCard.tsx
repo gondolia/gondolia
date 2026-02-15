@@ -16,6 +16,17 @@ export function ProductCard({ product }: ProductCardProps) {
     }).format(price);
   };
 
+  // Determine stock status for variant_parent
+  const getStockStatus = () => {
+    if (product.productType === 'variant_parent') {
+      const hasStock = product.variants?.some(v => v.availability?.inStock);
+      return hasStock ? 'available' : 'unavailable';
+    }
+    return product.stockQuantity > 0 ? 'available' : 'unavailable';
+  };
+
+  const stockStatus = getStockStatus();
+
   return (
     <Link href={`/products/${product.id}`}>
       <Panel className="h-full hover:shadow-lg transition-shadow cursor-pointer">
@@ -45,8 +56,15 @@ export function ProductCard({ product }: ProductCardProps) {
           )}
         </div>
         <div className="p-4 space-y-2">
-          <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-            {product.sku}
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+              {product.sku}
+            </div>
+            {product.productType === 'variant_parent' && product.variantCount && (
+              <div className="text-xs text-primary-600 dark:text-primary-400 font-medium">
+                {product.variantCount} Varianten
+              </div>
+            )}
           </div>
           <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2 min-h-[3rem]">
             {product.name}
@@ -58,14 +76,31 @@ export function ProductCard({ product }: ProductCardProps) {
           )}
           <div className="flex items-end justify-between pt-2">
             <div>
-              <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                {formatPrice(product.basePrice, product.currency)}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                pro {product.unit}
-              </div>
+              {product.productType === 'variant_parent' && product.priceRange ? (
+                // Show price range for variant_parent
+                <div>
+                  <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                    ab {formatPrice(product.priceRange.min, product.priceRange.currency)}
+                  </div>
+                  {product.priceRange.max !== product.priceRange.min && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      bis {formatPrice(product.priceRange.max, product.priceRange.currency)}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Show specific price for simple products
+                <div>
+                  <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                    {formatPrice(product.basePrice, product.currency)}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    pro {product.unit}
+                  </div>
+                </div>
+              )}
             </div>
-            {product.stockQuantity > 0 ? (
+            {stockStatus === 'available' ? (
               <span className="text-xs text-green-600 dark:text-green-400 font-medium">
                 Auf Lager
               </span>

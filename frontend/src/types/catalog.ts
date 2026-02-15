@@ -7,8 +7,68 @@ function ensureLeadingSlash(url: string | undefined): string | undefined {
   return `/${url}`;
 }
 
+// Product Types
+export type ProductType = 'simple' | 'variant_parent' | 'variant';
+
+// Variant Axis Definition
+export interface VariantAxis {
+  id?: string;
+  attributeCode: string;
+  position: number;
+  label: Record<string, string>; // i18n labels
+  options: AxisOption[];
+}
+
+// Axis Option (einzelner Wert einer Achse)
+export interface AxisOption {
+  code: string;
+  label: Record<string, string>; // i18n labels
+  position: number;
+  available?: boolean; // dynamisch: ist diese Option bei aktueller Auswahl verfügbar?
+}
+
+// Axis Value Entry (Achsenwert einer konkreten Variante)
+export interface AxisValueEntry {
+  axisAttributeCode: string;
+  optionCode: string;
+  axisLabel?: Record<string, string>;
+  optionLabel?: Record<string, string>;
+}
+
+// Variant Price
+export interface VariantPrice {
+  net: number;
+  currency: string;
+}
+
+// Variant Availability
+export interface VariantAvailability {
+  inStock: boolean;
+  quantity?: number;
+}
+
+// Product Variant (kompakte Darstellung innerhalb des Parent)
+export interface ProductVariant {
+  id: string;
+  sku: string;
+  axisValues: Record<string, string>; // attribute_code -> option_code
+  status: string;
+  images?: Array<{ url: string; isPrimary?: boolean; sortOrder?: number }>;
+  price?: VariantPrice;
+  availability?: VariantAvailability;
+}
+
+// Price Range (für variant_parent)
+export interface PriceRange {
+  min: number;
+  max: number;
+  currency: string;
+}
+
 export interface Product {
   id: string;
+  productType?: ProductType;
+  parentId?: string;
   sku: string;
   name: string;
   description: string;
@@ -28,6 +88,15 @@ export interface Product {
   attributes?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+  
+  // Variant-specific (nur bei variant_parent)
+  variantAxes?: VariantAxis[];
+  variants?: ProductVariant[];
+  priceRange?: PriceRange;
+  variantCount?: number;
+  
+  // Variant-specific (nur bei variant)
+  axisValues?: AxisValueEntry[];
 }
 
 export interface Category {
@@ -67,9 +136,49 @@ export interface Manufacturer {
 }
 
 // API Response Types (snake_case from backend)
+export interface ApiVariantAxis {
+  id?: string;
+  attribute_code: string;
+  position: number;
+  label?: Record<string, string>;
+  options?: ApiAxisOption[];
+}
+
+export interface ApiAxisOption {
+  code: string;
+  label: Record<string, string>;
+  position: number;
+  available?: boolean;
+}
+
+export interface ApiAxisValueEntry {
+  axis_attribute_code: string;
+  option_code: string;
+  axis_label?: Record<string, string>;
+  option_label?: Record<string, string>;
+}
+
+export interface ApiProductVariant {
+  id: string;
+  sku: string;
+  axis_values: Record<string, string>;
+  status: string;
+  images?: Array<{ url: string; is_primary?: boolean; sort_order?: number }>;
+  price?: {
+    net: number;
+    currency: string;
+  };
+  availability?: {
+    in_stock: boolean;
+    quantity?: number;
+  };
+}
+
 export interface ApiProduct {
   id: string;
   tenant_id: string;
+  product_type?: string; // 'simple' | 'variant_parent' | 'variant'
+  parent_id?: string;
   sku: string;
   name: string | { de?: string; en?: string }; // Multilingual support
   description: string | { de?: string; en?: string }; // Multilingual support
@@ -87,10 +196,21 @@ export interface ApiProduct {
   status?: string; // Backend uses "active" | "inactive" | "discontinued"
   is_active?: boolean;
   image_url?: string;
-  images?: string[];
+  images?: string[] | Array<{ url: string; is_primary?: boolean; sort_order?: number }>;
   attributes?: Array<{ key: string; type: string; value: string }>; // Backend structure
   created_at: string;
   updated_at: string;
+  
+  // Variant-specific
+  variant_axes?: ApiVariantAxis[];
+  variants?: ApiProductVariant[];
+  price_range?: {
+    min: number;
+    max: number;
+    currency: string;
+  };
+  variant_count?: number;
+  axis_values?: ApiAxisValueEntry[];
 }
 
 export interface ApiCategory {
@@ -174,8 +294,69 @@ export function mapApiProduct(api: ApiProduct): Product {
     Object.assign(attributes, api.attributes);
   }
 
+  // Map variant axes — extract options from variants if backend doesn't provide them
+  const variantAxes = api.variant_axes?.map(axis => {
+    const backendOptions = (axis.options || []).map(opt => ({
+      code: opt.code,
+      label: opt.label || {},
+      position: opt.position,
+      available: opt.available,
+    }));
+
+    // If no options from backend, derive them from variants' axis_values
+    const options = backendOptions.length > 0 ? backendOptions : (() => {
+      const uniqueCodes = new Set<string>();
+      (api.variants || []).forEach(v => {
+        const val = v.axis_values?.[axis.attribute_code];
+        if (val) uniqueCodes.add(val);
+      });
+      return Array.from(uniqueCodes).sort().map((code, idx) => ({
+        code,
+        label: { de: code.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) } as Record<string, string>,
+        position: idx,
+        available: true,
+      }));
+    })();
+
+    return {
+      id: axis.id,
+      attributeCode: axis.attribute_code,
+      position: axis.position,
+      label: axis.label || { de: axis.attribute_code.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) },
+      options,
+    };
+  });
+
+  // Map variants
+  const variants = api.variants?.map(v => ({
+    id: v.id,
+    sku: v.sku,
+    axisValues: v.axis_values,
+    status: v.status,
+    images: v.images?.map(img => ({
+      url: ensureLeadingSlash(img.url) || '',
+      isPrimary: img.is_primary,
+      sortOrder: img.sort_order,
+    })),
+    price: v.price,
+    availability: v.availability ? {
+      inStock: v.availability.in_stock,
+      quantity: v.availability.quantity,
+    } : undefined,
+  }));
+
+  // Map axis values (for variant products)
+  const axisValues = api.axis_values?.map(av => ({
+    axisAttributeCode: av.axis_attribute_code,
+    optionCode: av.option_code,
+    axisLabel: av.axis_label,
+    optionLabel: av.option_label,
+  }));
+
   return {
     id: api.id,
+    productType: (api.product_type as ProductType) || 'simple',
+    parentId: api.parent_id,
     sku: api.sku,
     name: getName(api.name),
     description: getName(api.description),
@@ -191,10 +372,17 @@ export function mapApiProduct(api: ApiProduct): Product {
     stockQuantity: api.stock_quantity || 0,
     isActive: api.is_active ?? (api.status === 'active'),
     imageUrl: ensureLeadingSlash(api.image_url || (api.images && api.images.length > 0 ? (typeof api.images[0] === 'string' ? api.images[0] : api.images[0]?.url) : undefined)),
-    images: api.images?.map((img: string | { url: string }) => ensureLeadingSlash(typeof img === 'string' ? img : img.url)),
+    images: api.images?.map((img: string | { url: string }) => ensureLeadingSlash(typeof img === 'string' ? img : img.url)).filter((url): url is string => url !== undefined),
     attributes,
     createdAt: api.created_at,
     updatedAt: api.updated_at,
+    
+    // Variant-specific fields
+    variantAxes,
+    variants,
+    priceRange: api.price_range,
+    variantCount: api.variant_count,
+    axisValues,
   };
 }
 

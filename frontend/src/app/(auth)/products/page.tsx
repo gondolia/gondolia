@@ -58,7 +58,15 @@ export default function ProductsPage() {
           limit: 12,
           includeChildren: true, // Backend handles subcategories
         });
-        setProducts(data);
+        
+        // Filter out variant products (only show simple and variant_parent)
+        const filteredItems = data.items.filter(
+          p => p.productType !== 'variant'
+        );
+        setProducts({
+          ...data,
+          items: filteredItems,
+        });
       } else {
         // No category filter — use general product search
         const data = await apiClient.getProducts({
@@ -66,7 +74,15 @@ export default function ProductsPage() {
           page: currentPage,
           limit: 12,
         });
-        setProducts(data);
+        
+        // Filter out variant products (only show simple and variant_parent)
+        const filteredItems = data.items.filter(
+          p => p.productType !== 'variant'
+        );
+        setProducts({
+          ...data,
+          items: filteredItems,
+        });
       }
     } catch (err) {
       const error = err as { message?: string };

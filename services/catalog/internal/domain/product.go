@@ -15,6 +15,15 @@ const (
 	ProductStatusArchived ProductStatus = "archived"
 )
 
+// ProductType represents the type of a product
+type ProductType string
+
+const (
+	ProductTypeSimple        ProductType = "simple"
+	ProductTypeVariantParent ProductType = "variant_parent"
+	ProductTypeVariant       ProductType = "variant"
+)
+
 // AttributeType represents the data type of a product attribute
 type AttributeType string
 
@@ -29,6 +38,8 @@ const (
 type Product struct {
 	ID          uuid.UUID            `json:"id"`
 	TenantID    uuid.UUID            `json:"tenant_id"`
+	ProductType ProductType          `json:"product_type"`
+	ParentID    *uuid.UUID           `json:"parent_id,omitempty"`
 	SKU         string               `json:"sku"`
 	Name        map[string]string    `json:"name"`        // locale -> name
 	Description map[string]string    `json:"description"` // locale -> description
@@ -43,6 +54,11 @@ type Product struct {
 	// PIM Integration
 	PIMIdentifier *string    `json:"pim_identifier,omitempty"`
 	LastSyncedAt  *time.Time `json:"last_synced_at,omitempty"`
+
+	// Variant-specific fields (populated based on product_type)
+	VariantAxes      []VariantAxis      `json:"variant_axes,omitempty"`       // Only for variant_parent
+	Variants         []ProductVariant   `json:"variants,omitempty"`           // Only for variant_parent
+	AxisValues       []AxisValueEntry   `json:"axis_values,omitempty"`        // Only for variant
 }
 
 // ProductAttribute represents a flexible product attribute
@@ -95,6 +111,7 @@ func NewProduct(tenantID uuid.UUID, sku string) *Product {
 	return &Product{
 		ID:          uuid.New(),
 		TenantID:    tenantID,
+		ProductType: ProductTypeSimple,
 		SKU:         sku,
 		Name:        make(map[string]string),
 		Description: make(map[string]string),
@@ -107,8 +124,34 @@ func NewProduct(tenantID uuid.UUID, sku string) *Product {
 	}
 }
 
+// IsVariantParent returns true if product is a variant parent
+func (p *Product) IsVariantParent() bool {
+	return p.ProductType == ProductTypeVariantParent
+}
+
+// IsVariant returns true if product is a variant
+func (p *Product) IsVariant() bool {
+	return p.ProductType == ProductTypeVariant
+}
+
+// GetEffectiveName returns the effective name for a variant (with inheritance from parent)
+func (p *Product) GetEffectiveName(parent *Product, locale string) string {
+	// Variant has own name?
+	if p.IsVariant() {
+		if name, ok := p.Name[locale]; ok && name != "" {
+			return name
+		}
+		// Fallback to parent name (axis values appended by service layer)
+		if parent != nil {
+			return parent.GetLocalizedName(locale)
+		}
+	}
+	return p.GetLocalizedName(locale)
+}
+
 // CreateProductRequest represents a request to create a product
 type CreateProductRequest struct {
+	ProductType ProductType                  `json:"product_type,omitempty"` // Defaults to 'simple'
 	SKU         string                       `json:"sku" binding:"required,min=1,max=100"`
 	Name        map[string]string            `json:"name" binding:"required"`
 	Description map[string]string            `json:"description,omitempty"`
@@ -116,6 +159,7 @@ type CreateProductRequest struct {
 	Attributes  []ProductAttribute           `json:"attributes,omitempty"`
 	Status      ProductStatus                `json:"status,omitempty"`
 	Images      []ProductImage               `json:"images,omitempty"`
+	VariantAxes []CreateVariantAxis          `json:"variant_axes,omitempty"` // Only for variant_parent
 }
 
 // UpdateProductRequest represents a request to update a product
@@ -134,7 +178,10 @@ type ProductFilter struct {
 	CategoryID      *uuid.UUID
 	IncludeChildren bool   // Include products from child categories
 	Status          *ProductStatus
-	Search          *string // Searches in SKU, name
+	ProductType     *ProductType // Filter by product type
+	ParentID        *uuid.UUID   // Filter variants by parent
+	ExcludeVariants bool         // Exclude variant products from list (show only simple + variant_parent)
+	Search          *string      // Searches in SKU, name
 	SKUs            []string
 	Limit           int
 	Offset          int

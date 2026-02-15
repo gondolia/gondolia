@@ -22,6 +22,20 @@ type ProductRepository interface {
 	Create(ctx context.Context, product *domain.Product) error
 	Update(ctx context.Context, product *domain.Product) error
 	Delete(ctx context.Context, id uuid.UUID) error // Soft delete
+
+	// Variant-specific methods
+	GetProductWithVariants(ctx context.Context, id uuid.UUID) (*domain.Product, error)
+	ListVariants(ctx context.Context, parentID uuid.UUID, status ...domain.ProductStatus) ([]domain.Product, error)
+	FindVariantByAxisValues(ctx context.Context, parentID uuid.UUID, axisValues map[string]string) (*domain.Product, error)
+	GetAvailableAxisValues(ctx context.Context, parentID uuid.UUID, selected map[string]string) (map[string][]domain.AxisOption, error)
+
+	// Variant axes management
+	SetVariantAxes(ctx context.Context, parentID uuid.UUID, axes []domain.VariantAxis) error
+	GetVariantAxes(ctx context.Context, parentID uuid.UUID) ([]domain.VariantAxis, error)
+
+	// Axis values for variants
+	SetAxisValues(ctx context.Context, variantID uuid.UUID, values []domain.AxisValueEntry) error
+	GetAxisValues(ctx context.Context, variantID uuid.UUID) ([]domain.AxisValueEntry, error)
 }
 
 // CategoryRepository defines the interface for category data access

@@ -53,6 +53,12 @@ func (s *ProductService) Create(ctx context.Context, tenantID uuid.UUID, req dom
 
 	// Create product
 	product := domain.NewProduct(tenantID, req.SKU)
+	
+	// Set product type (default to simple if not specified)
+	if req.ProductType != "" {
+		product.ProductType = req.ProductType
+	}
+	
 	product.Name = req.Name
 	product.Description = req.Description
 	product.CategoryIDs = req.CategoryIDs
@@ -65,6 +71,23 @@ func (s *ProductService) Create(ctx context.Context, tenantID uuid.UUID, req dom
 
 	if err := s.productRepo.Create(ctx, product); err != nil {
 		return nil, err
+	}
+
+	// If variant_parent with axes, create axes
+	if product.ProductType == domain.ProductTypeVariantParent && len(req.VariantAxes) > 0 {
+		axes := make([]domain.VariantAxis, len(req.VariantAxes))
+		for i, axisReq := range req.VariantAxes {
+			axes[i] = domain.VariantAxis{
+				ID:            uuid.New(),
+				ProductID:     product.ID,
+				AttributeCode: axisReq.AttributeCode,
+				Position:      axisReq.Position,
+			}
+		}
+		if err := s.productRepo.SetVariantAxes(ctx, product.ID, axes); err != nil {
+			return nil, err
+		}
+		product.VariantAxes = axes
 	}
 
 	return product, nil
