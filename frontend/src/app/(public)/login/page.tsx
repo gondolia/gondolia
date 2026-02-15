@@ -64,7 +64,16 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary-600">Webshop</h1>
+          <img
+            src="/images/logo-concepts/final/logo-full-light.png"
+            alt="Gondolia"
+            className="h-28 w-auto mx-auto dark:hidden"
+          />
+          <img
+            src="/images/logo-concepts/final/logo-full-dark.png"
+            alt="Gondolia"
+            className="h-28 w-auto mx-auto hidden dark:block"
+          />
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             Sign in to your account
           </p>
