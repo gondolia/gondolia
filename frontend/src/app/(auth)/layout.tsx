@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { apiClient } from "@/lib/api/client";
@@ -12,48 +12,57 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, accessToken, setAuth, setLoading, logout } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const accessToken = useAuthStore((s) => s.accessToken);
   const [isChecking, setIsChecking] = useState(true);
+  const checkingRef = useRef(false);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      // Wait for hydration
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    // Prevent double-invocation from React StrictMode
+    if (checkingRef.current) return;
+    checkingRef.current = true;
 
+    const checkAuth = async () => {
       const { accessToken: storedToken, isAuthenticated: isAuth } = useAuthStore.getState();
 
-      // No access token means user needs to login
-      // Refresh token is in HttpOnly cookie, so we'll try to get user info
-      // and if that fails (401), the client will auto-refresh via cookie
-      if (!storedToken && !isAuth) {
-        try {
-          // Try to get user info - this will auto-refresh if cookie exists
-          const me = await apiClient.getMe();
-          const { accessToken: newToken, tokenExpiresAt } = useAuthStore.getState();
-          
-          if (newToken && tokenExpiresAt) {
-            const expiresIn = Math.floor((tokenExpiresAt - Date.now()) / 1000);
-            setAuth(
-              me.user,
-              me.company,
-              me.availableCompanies,
-              newToken,
-              expiresIn
-            );
-          }
-        } catch {
-          logout();
-          router.replace("/login");
-          return;
-        }
+      // Already authenticated — no check needed
+      if (storedToken && isAuth) {
+        setIsChecking(false);
+        useAuthStore.getState().setLoading(false);
+        return;
       }
 
-      setIsChecking(false);
-      setLoading(false);
+      // No access token — try to restore session via refresh token cookie
+      try {
+        const me = await apiClient.getMe();
+        const { accessToken: newToken, tokenExpiresAt } = useAuthStore.getState();
+
+        if (newToken && tokenExpiresAt) {
+          const expiresIn = Math.floor((tokenExpiresAt - Date.now()) / 1000);
+          useAuthStore.getState().setAuth(
+            me.user,
+            me.company,
+            me.availableCompanies,
+            newToken,
+            expiresIn
+          );
+        }
+        setIsChecking(false);
+        useAuthStore.getState().setLoading(false);
+      } catch {
+        useAuthStore.getState().logout();
+        router.replace("/login");
+      }
     };
 
     checkAuth();
-  }, [router, setAuth, setLoading, logout]);
+
+    return () => {
+      // Allow re-check if component remounts after real unmount (not StrictMode)
+      // Small delay to distinguish StrictMode double-invoke from real remount
+      setTimeout(() => { checkingRef.current = false; }, 100);
+    };
+  }, [router]);
 
   if (isChecking) {
     return (

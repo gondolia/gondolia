@@ -347,6 +347,9 @@ func parseUUID(s string) (uuid.UUID, error) {
 func (h *AuthHandler) setRefreshTokenCookie(c *gin.Context, token string) {
 	maxAge := int(h.config.JWTRefreshTokenExpiry.Seconds())
 
+	// SameSite must be set BEFORE SetCookie
+	c.SetSameSite(http.SameSiteLaxMode)
+
 	c.SetCookie(
 		"refresh_token",           // name
 		token,                     // value
@@ -356,9 +359,6 @@ func (h *AuthHandler) setRefreshTokenCookie(c *gin.Context, token string) {
 		h.config.SecureCookies,    // secure - only HTTPS (configurable for dev)
 		true,                      // httpOnly - not accessible via JavaScript
 	)
-
-	// Set SameSite=Strict via SetSameSite
-	c.SetSameSite(http.SameSiteStrictMode)
 }
 
 // clearRefreshTokenCookie clears the refresh token cookie

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 48" fill="none">
+  <defs>
+    <linearGradient id="grd" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a3d6b"/>
+      <stop offset="60%" stop-color="#0e6ba8"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <!-- G-Mark: simplified gondola bow -->
+  <g transform="translate(2,2)">
+    <!-- Outer G shape with gondola bow top -->
+    <path d="M 20 2 C 18 0, 22 0, 22 3 L 21 6 C 19.5 4, 22.5 4, 22 6
+             L 19 16 C 16 22, 10 30, 8 35 C 5 40, 8 44, 14 44
+             L 30 44 C 36 44, 40 40, 40 34 L 40 24 L 24 24 L 24 20 L 44 20
+             C 44 20, 44 34, 44 34 C 44 42, 38 48, 30 48
+             L 14 48 C 4 48, 0 40, 4 33 C 8 26, 14 18, 16 12 Z"
+          fill="url(#grd)"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="56" y="36" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" 
+        font-size="32" font-weight="400" letter-spacing="-0.5" fill="#1e293b">gondolia</text>
+</svg>

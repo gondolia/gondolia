@@ -80,7 +80,8 @@ class ApiClient {
     });
 
     // Handle 401 - try to refresh token via cookie
-    if (response.status === 401 && accessToken) {
+    // Also attempt refresh when no accessToken (e.g. after page reload — token is in memory only)
+    if (response.status === 401) {
       const refreshed = await this.refreshToken();
       if (refreshed) {
         // Retry the original request with new token
@@ -127,7 +128,27 @@ class ApiClient {
     }
   }
 
+  // Guard against concurrent refresh attempts (React StrictMode double-invokes effects)
+  private refreshPromise: Promise<{ accessToken: string; expiresIn: number } | null> | null = null;
+
   private async refreshToken(): Promise<{
+    accessToken: string;
+    expiresIn: number;
+  } | null> {
+    // If a refresh is already in flight, wait for it instead of starting another
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = this.doRefresh();
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+
+  private async doRefresh(): Promise<{
     accessToken: string;
     expiresIn: number;
   } | null> {
@@ -312,9 +333,9 @@ class ApiClient {
   }
 
   async getProduct(id: string): Promise<Product> {
-    const response = await this.request<ApiProduct>(`/api/v1/products/${id}`);
+    const response = await this.request<{ data: ApiProduct }>(`/api/v1/products/${id}`);
     const { mapApiProduct } = await import("@/types/catalog");
-    return mapApiProduct(response);
+    return mapApiProduct(response.data);
   }
 
   async searchProducts(query: string): Promise<Product[]> {
@@ -442,6 +463,77 @@ class ApiClient {
       // Fallback if endpoint doesn't exist yet
       return [];
     }
+  }
+
+  // ==================== VARIANT API ====================
+
+  // Get all variants of a parent product
+  async getProductVariants(productId: string): Promise<import("@/types/catalog").ProductVariant[]> {
+    const response = await this.request<{ data: import("@/types/catalog").ApiProductVariant[] }>(
+      `/api/v1/products/${productId}/variants`
+    );
+    
+    return (response.data || []).map(v => ({
+      id: v.id,
+      sku: v.sku,
+      axisValues: v.axis_values,
+      status: v.status,
+      images: v.images?.map(img => ({
+        url: img.url,
+        isPrimary: img.is_primary,
+        sortOrder: img.sort_order,
+      })),
+      price: v.price,
+      availability: v.availability ? {
+        inStock: v.availability.in_stock,
+        quantity: v.availability.quantity,
+      } : undefined,
+    }));
+  }
+
+  // Select a specific variant based on axis values
+  async selectVariant(
+    productId: string, 
+    axisValues: Record<string, string>
+  ): Promise<Product> {
+    const params = new URLSearchParams(axisValues);
+    const response = await this.request<{ data: import("@/types/catalog").ApiProduct }>(
+      `/api/v1/products/${productId}/variants/select?${params.toString()}`
+    );
+    
+    const { mapApiProduct } = await import("@/types/catalog");
+    return mapApiProduct(response.data);
+  }
+
+  // Get available axis values based on current selection
+  async getAvailableAxisValues(
+    productId: string,
+    selectedAxes: Record<string, string>
+  ): Promise<{
+    selected: Record<string, string>;
+    available: Record<string, import("@/types/catalog").AxisOption[]>;
+  }> {
+    const params = new URLSearchParams(selectedAxes);
+    const response = await this.request<{
+      selected: Record<string, string>;
+      available: Record<string, import("@/types/catalog").ApiAxisOption[]>;
+    }>(`/api/v1/products/${productId}/variants/available?${params.toString()}`);
+    
+    // Map available options
+    const available: Record<string, import("@/types/catalog").AxisOption[]> = {};
+    for (const [axisCode, options] of Object.entries(response.available)) {
+      available[axisCode] = options.map(opt => ({
+        code: opt.code,
+        label: opt.label || {},
+        position: opt.position,
+        available: opt.available,
+      }));
+    }
+    
+    return {
+      selected: response.selected,
+      available,
+    };
   }
 }
 
