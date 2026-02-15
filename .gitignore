@@ -68,3 +68,4 @@ docker-compose.override.yml
 # Build binaries
 migrate
 server
+docs/architecture/
