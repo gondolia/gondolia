@@ -69,3 +69,5 @@ docker-compose.override.yml
 migrate
 server
 docs/architecture/
+@eaDir/
+frontend/public/images/

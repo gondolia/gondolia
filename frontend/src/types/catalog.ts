@@ -1,5 +1,12 @@
 // Catalog Types für Gondolia Webshop
 
+/** Ensure relative URLs have a leading slash so they resolve from root, not relative to current path */
+function ensureLeadingSlash(url: string | undefined): string | undefined {
+  if (!url) return url;
+  if (url.startsWith('/') || url.startsWith('http')) return url;
+  return `/${url}`;
+}
+
 export interface Product {
   id: string;
   sku: string;
@@ -183,8 +190,8 @@ export function mapApiProduct(api: ApiProduct): Product {
     minOrderQuantity: api.min_order_quantity || 1,
     stockQuantity: api.stock_quantity || 0,
     isActive: api.is_active ?? (api.status === 'active'),
-    imageUrl: api.image_url || (api.images && api.images.length > 0 ? (typeof api.images[0] === 'string' ? api.images[0] : api.images[0]?.url) : undefined),
-    images: api.images?.map((img: string | { url: string }) => typeof img === 'string' ? img : img.url),
+    imageUrl: ensureLeadingSlash(api.image_url || (api.images && api.images.length > 0 ? (typeof api.images[0] === 'string' ? api.images[0] : api.images[0]?.url) : undefined)),
+    images: api.images?.map((img: string | { url: string }) => ensureLeadingSlash(typeof img === 'string' ? img : img.url)),
     attributes,
     createdAt: api.created_at,
     updatedAt: api.updated_at,
