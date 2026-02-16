@@ -3,11 +3,72 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/gondolia/gondolia/services/catalog/internal/domain"
 )
+
+// formatOptionLabel generates a human-readable i18n label from an option code
+// e.g. "1_5kw" -> {"de": "1,5 kW", "en": "1.5 kW"}, "230v" -> {"de": "230V", "en": "230V"}
+func formatOptionLabel(code string) map[string]string {
+	label := code
+
+	// Common unit suffixes
+	units := map[string]string{
+		"kw": " kW", "kva": " kVA", "v": "V", "a": "A",
+		"mm": " mm", "cm": " cm", "m": " m", "kg": " kg", "g": " g",
+		"l": " L", "ml": " mL", "bar": " bar", "rpm": " rpm",
+	}
+
+	// Try to extract numeric part and unit
+	for suffix, formatted := range units {
+		if strings.HasSuffix(strings.ToLower(label), suffix) {
+			numPart := label[:len(label)-len(suffix)]
+			// Replace underscores with dots for numeric values
+			numPart = strings.ReplaceAll(numPart, "_", ".")
+			deLbl := strings.ReplaceAll(numPart, ".", ",") + formatted
+			enLbl := numPart + formatted
+			return map[string]string{"de": deLbl, "en": enLbl}
+		}
+	}
+
+	// No unit found: humanize the code (replace underscores, title case)
+	label = strings.ReplaceAll(label, "_", " ")
+	label = strings.ToUpper(label[:1]) + label[1:]
+	return map[string]string{"de": label, "en": label}
+}
+
+// formatAxisLabel generates a human-readable i18n label from an axis attribute_code
+// e.g. "power_rating" -> {"de": "Leistung", "en": "Power Rating"}
+func formatAxisLabel(code string) map[string]string {
+	knownAxes := map[string]map[string]string{
+		"power_rating":  {"de": "Leistung", "en": "Power Rating"},
+		"voltage":       {"de": "Spannung", "en": "Voltage"},
+		"mounting_type": {"de": "Bauform", "en": "Mounting Type"},
+		"size":          {"de": "Grösse", "en": "Size"},
+		"color":         {"de": "Farbe", "en": "Color"},
+		"material":      {"de": "Material", "en": "Material"},
+		"weight":        {"de": "Gewicht", "en": "Weight"},
+		"length":        {"de": "Länge", "en": "Length"},
+		"width":         {"de": "Breite", "en": "Width"},
+		"height":        {"de": "Höhe", "en": "Height"},
+	}
+
+	if labels, ok := knownAxes[code]; ok {
+		return labels
+	}
+
+	// Fallback: humanize the code
+	label := strings.ReplaceAll(code, "_", " ")
+	words := strings.Fields(label)
+	for i, w := range words {
+		words[i] = strings.ToUpper(w[:1]) + w[1:]
+	}
+	humanized := strings.Join(words, " ")
+	return map[string]string{"de": humanized, "en": humanized}
+}
 
 // GetProductWithVariants retrieves a product with all its variants (if parent)
 func (r *ProductRepository) GetProductWithVariants(ctx context.Context, id uuid.UUID) (*domain.Product, error) {
@@ -26,9 +87,7 @@ func (r *ProductRepository) GetProductWithVariants(ctx context.Context, id uuid.
 	if err != nil {
 		return nil, fmt.Errorf("failed to load variant axes: %w", err)
 	}
-	product.VariantAxes = axes
-
-	// Load all variants
+	// Load all variants (need these first to build axis options)
 	variants, err := r.ListVariants(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load variants: %w", err)
@@ -51,6 +110,27 @@ func (r *ProductRepository) GetProductWithVariants(ctx context.Context, id uuid.
 			Images:     variant.Images,
 		}
 	}
+
+	// Build axis options from actual variant data and generate labels
+	for i := range axes {
+		optionSet := make(map[string]bool)
+		var options []domain.AxisOption
+		pos := 0
+		for _, v := range product.Variants {
+			if code, ok := v.AxisValues[axes[i].AttributeCode]; ok && !optionSet[code] {
+				optionSet[code] = true
+				options = append(options, domain.AxisOption{
+					Code:     code,
+					Label:    formatOptionLabel(code),
+					Position: pos,
+				})
+				pos++
+			}
+		}
+		axes[i].Options = options
+		axes[i].Label = formatAxisLabel(axes[i].AttributeCode)
+	}
+	product.VariantAxes = axes
 
 	return product, nil
 }
