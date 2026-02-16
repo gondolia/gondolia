@@ -24,7 +24,8 @@ type Category struct {
 	LastSyncedAt *time.Time `json:"last_synced_at,omitempty"`
 
 	// Loaded relations (not always populated)
-	Children []Category `json:"children,omitempty"`
+	Children  []Category `json:"children,omitempty"`
+	Ancestors []Category `json:"ancestors,omitempty"` // Path from root to parent (for breadcrumbs)
 	
 	// Computed fields
 	ProductCount int `json:"product_count,omitempty"`

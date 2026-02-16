@@ -27,6 +27,11 @@ func (s *CategoryService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Ca
 	return s.categoryRepo.GetByID(ctx, id)
 }
 
+// GetByIDWithAncestors retrieves a category by ID including its ancestors (for breadcrumbs)
+func (s *CategoryService) GetByIDWithAncestors(ctx context.Context, id uuid.UUID) (*domain.Category, error) {
+	return s.categoryRepo.GetByIDWithAncestors(ctx, id)
+}
+
 // GetByCode retrieves a category by code
 func (s *CategoryService) GetByCode(ctx context.Context, tenantID uuid.UUID, code string) (*domain.Category, error) {
 	return s.categoryRepo.GetByCode(ctx, tenantID, code)

@@ -31,6 +31,66 @@ func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 	return r.scanCategory(r.db.Pool.QueryRow(ctx, query, id))
 }
 
+func (r *CategoryRepository) GetByIDWithAncestors(ctx context.Context, id uuid.UUID) (*domain.Category, error) {
+	category, err := r.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	ancestors, err := r.GetAncestors(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	category.Ancestors = ancestors
+	return category, nil
+}
+
+func (r *CategoryRepository) GetAncestors(ctx context.Context, id uuid.UUID) ([]domain.Category, error) {
+	query := `
+		WITH RECURSIVE ancestors AS (
+			-- Start with the parent of the given category
+			SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.sort_order, c.active,
+			       c.pim_code, c.last_synced_at, c.created_at, c.updated_at, c.deleted_at,
+			       1 as depth
+			FROM categories c
+			INNER JOIN categories child ON child.parent_id = c.id
+			WHERE child.id = $1 AND c.deleted_at IS NULL
+			
+			UNION ALL
+			
+			-- Recursively get parent categories
+			SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.sort_order, c.active,
+			       c.pim_code, c.last_synced_at, c.created_at, c.updated_at, c.deleted_at,
+			       a.depth + 1
+			FROM categories c
+			INNER JOIN ancestors a ON a.parent_id = c.id
+			WHERE c.deleted_at IS NULL
+		)
+		SELECT id, tenant_id, code, parent_id, name, sort_order, active,
+		       pim_code, last_synced_at, created_at, updated_at, deleted_at
+		FROM ancestors
+		ORDER BY depth DESC
+	`
+
+	rows, err := r.db.Pool.Query(ctx, query, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ancestors []domain.Category
+	for rows.Next() {
+		category, err := r.scanCategoryFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		ancestors = append(ancestors, *category)
+	}
+
+	return ancestors, rows.Err()
+}
+
 func (r *CategoryRepository) GetByCode(ctx context.Context, tenantID uuid.UUID, code string) (*domain.Category, error) {
 	query := `
 		SELECT id, tenant_id, code, parent_id, name, sort_order, active,

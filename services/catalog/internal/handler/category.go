@@ -113,7 +113,16 @@ func (h *CategoryHandler) Get(c *gin.Context) {
 		return
 	}
 
-	category, err := h.categoryService.GetByID(c.Request.Context(), id)
+	// Check if ancestors should be included (for breadcrumbs)
+	includeAncestors := c.Query("include_ancestors") == "true"
+	
+	var category *domain.Category
+	if includeAncestors {
+		category, err = h.categoryService.GetByIDWithAncestors(c.Request.Context(), id)
+	} else {
+		category, err = h.categoryService.GetByID(c.Request.Context(), id)
+	}
+
 	if err != nil {
 		status := http.StatusInternalServerError
 		code := "INTERNAL_ERROR"
