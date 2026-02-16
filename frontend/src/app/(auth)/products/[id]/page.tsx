@@ -299,7 +299,7 @@ export default function ProductDetailPage() {
           <span key={cat.id}>
             <span className="mx-2">/</span>
             <Link
-              href={`/products?category=${cat.id}`}
+              href={`/categories/${cat.id}`}
               className="hover:text-primary-600 dark:hover:text-primary-400"
             >
               {cat.name}
@@ -369,6 +369,7 @@ export default function ProductDetailPage() {
                   axes={product.variantAxes}
                   selectedValues={selectedAxisValues}
                   onSelect={handleAxisSelection}
+                  variants={product.variants}
                   availableValues={availableAxisValues}
                 />
                 {isLoadingVariant && (
