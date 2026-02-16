@@ -186,3 +186,9 @@ type ProductFilter struct {
 	Limit           int
 	Offset          int
 }
+
+// ProductWithTranslatedAttributes extends Product with translated attributes
+type ProductWithTranslatedAttributes struct {
+	Product
+	TranslatedAttributes []ProductAttributeWithTranslation `json:"translated_attributes,omitempty"`
+}

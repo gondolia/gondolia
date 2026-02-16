@@ -41,6 +41,7 @@ type ProductRepository interface {
 // CategoryRepository defines the interface for category data access
 type CategoryRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Category, error)
+	GetByIDWithAncestors(ctx context.Context, id uuid.UUID) (*domain.Category, error)
 	GetByCode(ctx context.Context, tenantID uuid.UUID, code string) (*domain.Category, error)
 	GetTree(ctx context.Context, tenantID uuid.UUID) ([]domain.Category, error)
 	List(ctx context.Context, filter domain.CategoryFilter) ([]domain.Category, int, error)
@@ -48,6 +49,7 @@ type CategoryRepository interface {
 	Update(ctx context.Context, category *domain.Category) error
 	Delete(ctx context.Context, id uuid.UUID) error // Soft delete
 	HasProducts(ctx context.Context, id uuid.UUID) (bool, error)
+	GetAncestors(ctx context.Context, id uuid.UUID) ([]domain.Category, error)
 }
 
 // PriceRepository defines the interface for price data access
@@ -59,4 +61,14 @@ type PriceRepository interface {
 	Update(ctx context.Context, price *domain.Price) error
 	Delete(ctx context.Context, id uuid.UUID) error // Soft delete
 	CheckOverlap(ctx context.Context, price *domain.Price) (bool, error)
+}
+
+// AttributeTranslationRepository defines the interface for attribute translation data access
+type AttributeTranslationRepository interface {
+	GetByKey(ctx context.Context, tenantID uuid.UUID, attributeKey, locale string) (*domain.AttributeTranslation, error)
+	GetByTenantAndLocale(ctx context.Context, tenantID uuid.UUID, locale string) (map[string]*domain.AttributeTranslation, error)
+	List(ctx context.Context, filter domain.AttributeTranslationFilter) ([]domain.AttributeTranslation, int, error)
+	Create(ctx context.Context, translation *domain.AttributeTranslation) error
+	Update(ctx context.Context, translation *domain.AttributeTranslation) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }

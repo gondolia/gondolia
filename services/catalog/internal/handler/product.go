@@ -60,6 +60,28 @@ func (h *ProductHandler) List(c *gin.Context) {
 		filter.Offset = offset
 	}
 
+	// Check if locale is requested for translated attributes
+	locale := c.Query("locale")
+	if locale != "" {
+		products, total, err := h.productService.ListWithTranslations(c.Request.Context(), filter, locale)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"code":    "INTERNAL_ERROR",
+					"message": err.Error(),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"data":   products,
+			"total":  total,
+			"limit":  filter.Limit,
+			"offset": filter.Offset,
+		})
+		return
+	}
+
 	products, total, err := h.productService.List(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -89,6 +111,29 @@ func (h *ProductHandler) Get(c *gin.Context) {
 				"message": "invalid product ID",
 			},
 		})
+		return
+	}
+
+	// Check if locale is requested for translated attributes
+	locale := c.Query("locale")
+	if locale != "" {
+		product, err := h.productService.GetByIDWithTranslations(c.Request.Context(), id, locale)
+		if err != nil {
+			status := http.StatusInternalServerError
+			code := "INTERNAL_ERROR"
+			if domain.IsNotFoundError(err) {
+				status = http.StatusNotFound
+				code = "NOT_FOUND"
+			}
+			c.JSON(status, gin.H{
+				"error": gin.H{
+					"code":    code,
+					"message": err.Error(),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusOK, product)
 		return
 	}
 
