@@ -102,7 +102,7 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.catalog.rule=PathPrefix(`/api/v1/products`) || PathPrefix(`/api/v1/categories`) || PathPrefix(`/api/v1/prices`) || PathPrefix(`/api/v1/search`) || PathPrefix(`/api/v1/sync`)"
+      - "traefik.http.routers.catalog.rule=PathPrefix(`/api/v1/products`) || PathPrefix(`/api/v1/categories`) || PathPrefix(`/api/v1/prices`) || PathPrefix(`/api/v1/search`) || PathPrefix(`/api/v1/sync`) || PathPrefix(`/api/v1/attribute-translations`)"
       - "traefik.http.routers.catalog.entrypoints=web"
       - "traefik.http.services.catalog.loadbalancer.server.port=8081"
       - "traefik.http.routers.catalog.priority=20"

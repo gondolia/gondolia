@@ -94,8 +94,10 @@ export interface Product {
   variants?: ProductVariant[];
   priceRange?: PriceRange;
   variantCount?: number;
+  variantSummary?: Record<string, string[]>; // axis_code -> list of labels
   
   // Variant-specific (nur bei variant)
+  parentSummary?: { id: string; sku: string; name: Record<string, string> };
   axisValues?: AxisValueEntry[];
 }
 
@@ -210,6 +212,8 @@ export interface ApiProduct {
     currency: string;
   };
   variant_count?: number;
+  variant_summary?: Record<string, string[]>;
+  parent_summary?: { id: string; sku: string; name: Record<string, string> };
   axis_values?: ApiAxisValueEntry[];
 }
 
@@ -252,6 +256,21 @@ export interface ApiManufacturer {
   website?: string;
   is_active: boolean;
 }
+
+// Attribute Translation (i18n for product attribute keys)
+export interface ApiAttributeTranslation {
+  id: string;
+  tenant_id: string;
+  attribute_key: string;
+  locale: string;
+  display_name: string;
+  unit?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Mapped frontend type: attribute_key -> display label (incl. unit if present)
+export type AttributeLabels = Record<string, string>;
 
 // Paginated Response
 export interface PaginatedResponse<T> {
@@ -382,6 +401,8 @@ export function mapApiProduct(api: ApiProduct): Product {
     variants,
     priceRange: api.price_range,
     variantCount: api.variant_count,
+    variantSummary: api.variant_summary,
+    parentSummary: api.parent_summary,
     axisValues,
   };
 }

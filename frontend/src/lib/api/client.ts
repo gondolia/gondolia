@@ -16,6 +16,8 @@ import type {
   ApiCategory,
   ApiPriceScale,
   ApiManufacturer,
+  ApiAttributeTranslation,
+  AttributeLabels,
   PaginatedResponse,
   ProductSearchParams,
 } from "@/types/catalog";
@@ -368,6 +370,15 @@ class ApiClient {
     return roots;
   }
 
+  async getChildCategories(parentId: string): Promise<Category[]> {
+    // Backend /categories/list endpoint with parent_id filter and product_count
+    const response = await this.request<{ data: ApiCategory[]; total: number }>(
+      `/api/v1/categories/list?parent_id=${parentId}`
+    );
+    const { mapApiCategory } = await import("@/types/catalog");
+    return (response.data || []).map(mapApiCategory);
+  }
+
   async getCategory(id: string): Promise<Category> {
     const response = await this.request<ApiCategory>(`/api/v1/categories/${id}`);
     const { mapApiCategory } = await import("@/types/catalog");
@@ -462,6 +473,27 @@ class ApiClient {
     } catch {
       // Fallback if endpoint doesn't exist yet
       return [];
+    }
+  }
+
+  // Attribute Translations
+  async getAttributeTranslations(locale = "de"): Promise<AttributeLabels> {
+    try {
+      const response = await this.request<{
+        data: Record<string, ApiAttributeTranslation>;
+      }>(`/api/v1/attribute-translations/by-locale/${locale}`);
+
+      // Convert to simple key -> label map, appending unit if present
+      const labels: AttributeLabels = {};
+      for (const [key, translation] of Object.entries(response.data || {})) {
+        labels[key] = translation.unit
+          ? `${translation.display_name} (${translation.unit})`
+          : translation.display_name;
+      }
+      return labels;
+    } catch {
+      // Fallback: return empty map, caller will use raw keys
+      return {};
     }
   }
 

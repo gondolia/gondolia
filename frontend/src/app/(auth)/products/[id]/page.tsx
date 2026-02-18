@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient } from "@/lib/api/client";
-import type { Product, PriceScale, Category, AxisOption } from "@/types/catalog";
+import type { Product, PriceScale, Category, AxisOption, AttributeLabels } from "@/types/catalog";
 import { Panel, PanelHeader, PanelBody } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
 import { VariantSelector } from "@/components/catalog/VariantSelector";
+import { VariantMatrixView } from "@/components/catalog/VariantMatrixView";
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -19,6 +20,7 @@ export default function ProductDetailPage() {
   const [priceScales, setPriceScales] = useState<PriceScale[]>([]);
   const [category, setCategory] = useState<Category | null>(null);
   const [categoryChain, setCategoryChain] = useState<Category[]>([]);
+  const [attributeLabels, setAttributeLabels] = useState<AttributeLabels>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -28,9 +30,12 @@ export default function ProductDetailPage() {
   const [availableAxisValues, setAvailableAxisValues] = useState<Record<string, AxisOption[]>>({});
   const [selectedVariant, setSelectedVariant] = useState<Product | null>(null);
   const [isLoadingVariant, setIsLoadingVariant] = useState(false);
+  const [viewMode, setViewMode] = useState<'selector' | 'matrix'>('selector');
 
   useEffect(() => {
     loadProductDetails();
+    // Load attribute translations once (locale DE)
+    apiClient.getAttributeTranslations("de").then(setAttributeLabels).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
@@ -165,6 +170,16 @@ export default function ProductDetailPage() {
       ...prev,
       [axisCode]: optionCode,
     }));
+  };
+
+  // Resolve a human-readable label for an attribute key.
+  // Priority: 1) API translation  2) prettified key (snake_case → Title Case)
+  const getAttributeLabel = (key: string): string => {
+    if (attributeLabels[key]) return attributeLabels[key];
+    // Prettify: remove trailing _unit suffix variations and capitalise words
+    return key
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
   const formatPrice = (price: number, currency: string) => {
@@ -356,26 +371,63 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* Variant Selector (only for variant_parent) */}
+          {/* Variant Selector / Matrix Toggle (only for variant_parent) */}
           {product.productType === 'variant_parent' && product.variantAxes && (
             <Panel>
               <PanelHeader>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Variante wählen
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {viewMode === 'selector' ? 'Variante wählen' : 'Alle Varianten'}
+                  </h2>
+                  <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('selector')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        viewMode === 'selector'
+                          ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      }`}
+                    >
+                      Auswahl
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('matrix')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                        viewMode === 'matrix'
+                          ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      }`}
+                    >
+                      Matrix
+                    </button>
+                  </div>
+                </div>
               </PanelHeader>
               <PanelBody>
-                <VariantSelector
-                  axes={product.variantAxes}
-                  selectedValues={selectedAxisValues}
-                  onSelect={handleAxisSelection}
-                  variants={product.variants}
-                  availableValues={availableAxisValues}
-                />
-                {isLoadingVariant && (
-                  <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-                    Variante wird geladen...
-                  </div>
+                {viewMode === 'selector' ? (
+                  <>
+                    <VariantSelector
+                      axes={product.variantAxes}
+                      selectedValues={selectedAxisValues}
+                      onSelect={handleAxisSelection}
+                      variants={product.variants}
+                      availableValues={availableAxisValues}
+                    />
+                    {isLoadingVariant && (
+                      <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                        Variante wird geladen...
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <VariantMatrixView
+                    axes={product.variantAxes}
+                    variants={product.variants || []}
+                    currency={product.currency}
+                    unit={product.unit}
+                  />
                 )}
               </PanelBody>
             </Panel>
@@ -572,7 +624,7 @@ export default function ProductDetailPage() {
                   className="border-b border-gray-200 dark:border-gray-700 pb-3"
                 >
                   <dt className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                    {key}
+                    {getAttributeLabel(key)}
                   </dt>
                   <dd className="text-gray-900 dark:text-white font-medium">
                     {value}
