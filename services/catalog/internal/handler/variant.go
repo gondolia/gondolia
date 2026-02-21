@@ -13,7 +13,8 @@ import (
 
 // VariantHandler handles variant product endpoints
 type VariantHandler struct {
-	variantService *service.VariantService
+	variantService    *service.VariantService
+	parametricService *service.ParametricService
 }
 
 // NewVariantHandler creates a new variant handler
@@ -21,6 +22,11 @@ func NewVariantHandler(variantService *service.VariantService) *VariantHandler {
 	return &VariantHandler{
 		variantService: variantService,
 	}
+}
+
+// SetParametricService injects the parametric service (optional dependency)
+func (h *VariantHandler) SetParametricService(ps *service.ParametricService) {
+	h.parametricService = ps
 }
 
 // CreateVariantParent handles POST /products (with product_type=variant_parent)
@@ -137,7 +143,31 @@ func (h *VariantHandler) GetProductWithVariants(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": product})
+	// Enrich parametric products with axis options and pricing
+	response := gin.H{"data": product}
+	if product.ProductType == domain.ProductTypeParametric && h.parametricService != nil {
+		// Load select-axis options from axis_options table
+		axisOptions, err := h.parametricService.GetAxisOptions(c.Request.Context(), id)
+		if err == nil && axisOptions != nil {
+			for i := range product.VariantAxes {
+				if opts, ok := axisOptions[product.VariantAxes[i].ID]; ok {
+					product.VariantAxes[i].Options = opts
+				}
+			}
+		}
+		// Include parametric pricing info
+		pricing, err := h.parametricService.GetPricing(c.Request.Context(), id)
+		if err == nil && pricing != nil {
+			response["parametric_pricing"] = pricing
+		}
+		// Include SKU mappings
+		skuMappings, err := h.parametricService.GetSKUMappings(c.Request.Context(), id)
+		if err == nil && skuMappings != nil {
+			response["sku_mappings"] = skuMappings
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // ListVariants handles GET /products/:id/variants

@@ -335,9 +335,39 @@ class ApiClient {
   }
 
   async getProduct(id: string): Promise<Product> {
-    const response = await this.request<{ data: ApiProduct }>(`/api/v1/products/${id}`);
+    const response = await this.request<{ data: ApiProduct; parametric_pricing?: any }>(`/api/v1/products/${id}`);
     const { mapApiProduct } = await import("@/types/catalog");
-    return mapApiProduct(response.data);
+    const product = mapApiProduct(response.data);
+    // Attach parametric pricing if present
+    if (response.parametric_pricing) {
+      const pp = response.parametric_pricing;
+      product.parametricPricing = {
+        id: pp.id,
+        productId: pp.product_id,
+        formulaType: pp.formula_type,
+        basePrice: pp.base_price,
+        unitPrice: pp.unit_price,
+        currency: pp.currency,
+        minOrderValue: pp.min_order_value,
+      };
+    }
+    return product;
+  }
+
+  async calculateParametricPrice(productId: string, parameters: Record<string, number>, selections?: Record<string, string>, quantity?: number): Promise<import("@/types/catalog").ParametricPriceResponse> {
+    const raw = await this.request<Record<string, unknown>>(`/api/v1/products/${productId}/calculate-price`, {
+      method: 'POST',
+      body: JSON.stringify({ parameters, selections: selections || {}, quantity: quantity || 1 }),
+    });
+    // Map snake_case API response to camelCase
+    return {
+      sku: raw.sku as string,
+      unitPrice: raw.unit_price as number,
+      totalPrice: raw.total_price as number,
+      currency: raw.currency as string,
+      quantity: raw.quantity as number,
+      breakdown: raw.breakdown as Record<string, number> | undefined,
+    };
   }
 
   async searchProducts(query: string): Promise<Product[]> {

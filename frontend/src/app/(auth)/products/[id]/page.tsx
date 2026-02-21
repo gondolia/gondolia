@@ -9,6 +9,7 @@ import { Panel, PanelHeader, PanelBody } from "@/components/ui/Panel";
 import { Button } from "@/components/ui/Button";
 import { VariantSelector } from "@/components/catalog/VariantSelector";
 import { VariantMatrixView } from "@/components/catalog/VariantMatrixView";
+import { ParametricConfigurator } from "@/components/catalog/ParametricConfigurator";
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -90,7 +91,7 @@ export default function ProductDetailPage() {
       setProduct(productData);
 
       // Load prices (only for simple or variant products, not variant_parent)
-      if (productData.productType !== 'variant_parent') {
+      if (productData.productType !== 'variant_parent' && productData.productType !== 'parametric') {
         const pricesData = await apiClient.getProductPrices(productId);
         setPriceScales(pricesData);
       }
@@ -172,6 +173,12 @@ export default function ProductDetailPage() {
     }));
   };
 
+  // Called from VariantMatrixView when user clicks a row
+  const handleMatrixVariantSelect = (variantId: string, axisValues: Record<string, string>) => {
+    // Setting all axis values at once triggers the existing selectVariant() flow
+    setSelectedAxisValues(axisValues);
+  };
+
   // Resolve a human-readable label for an attribute key.
   // Priority: 1) API translation  2) prettified key (snake_case → Title Case)
   const getAttributeLabel = (key: string): string => {
@@ -215,11 +222,23 @@ export default function ProductDetailPage() {
   };
 
   const getDisplayImage = (): string | undefined => {
-    // If variant has its own image, use it
+    // Priority 1: full variant product imageUrl (from /variants/select API)
     if (selectedVariant?.imageUrl) {
       return selectedVariant.imageUrl;
     }
-    // Otherwise use parent/product image
+    // Priority 2: first image URL from the variant's images array
+    if (selectedVariant?.images && selectedVariant.images.length > 0) {
+      return selectedVariant.images[0];
+    }
+    // Priority 3: check the embedded variant list in parent for a primary image
+    if (selectedVariant && product?.variants) {
+      const embedded = product.variants.find(v => v.id === selectedVariant.id);
+      if (embedded?.images && embedded.images.length > 0) {
+        const primary = embedded.images.find(img => img.isPrimary) ?? embedded.images[0];
+        if (primary?.url) return primary.url;
+      }
+    }
+    // Fallback: parent product image
     return product?.imageUrl;
   };
 
@@ -427,14 +446,37 @@ export default function ProductDetailPage() {
                     variants={product.variants || []}
                     currency={product.currency}
                     unit={product.unit}
+                    getVariantPrices={(variantId) => apiClient.getProductPrices(variantId)}
                   />
                 )}
               </PanelBody>
             </Panel>
           )}
 
-          {/* Price & Stock */}
-          <Panel>
+          {/* Parametric Configurator (only for parametric products) */}
+          {product.productType === 'parametric' && product.variantAxes && (
+            <Panel>
+              <PanelHeader>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Konfigurieren
+                </h2>
+              </PanelHeader>
+              <PanelBody>
+                <ParametricConfigurator
+                  productId={product.id}
+                  axes={product.variantAxes}
+                  pricing={product.parametricPricing}
+                  currency={product.currency}
+                />
+              </PanelBody>
+            </Panel>
+          )}
+
+          {/* Price & Stock — hidden when matrix mode is active or parametric (has its own price display) */}
+          <Panel className={
+            (viewMode === 'matrix' && product.productType === 'variant_parent') || product.productType === 'parametric'
+              ? 'hidden' : ''
+          }>
             <PanelBody>
               <div className="flex items-end justify-between">
                 <div>

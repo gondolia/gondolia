@@ -63,6 +63,26 @@ type PriceRepository interface {
 	CheckOverlap(ctx context.Context, price *domain.Price) (bool, error)
 }
 
+// ParametricPricingRepository defines the interface for parametric pricing data access
+type ParametricPricingRepository interface {
+	GetByProductID(ctx context.Context, productID uuid.UUID) (*domain.ParametricPricing, error)
+	Create(ctx context.Context, pricing *domain.ParametricPricing) error
+	Update(ctx context.Context, pricing *domain.ParametricPricing) error
+	Delete(ctx context.Context, productID uuid.UUID) error
+}
+
+// AxisOptionRepository defines the interface for parametric axis option data access
+type AxisOptionRepository interface {
+	ListByAxisID(ctx context.Context, axisID uuid.UUID) ([]domain.AxisOption, error)
+	ListByProductID(ctx context.Context, productID uuid.UUID) (map[uuid.UUID][]domain.AxisOption, error)
+}
+
+// SKUMappingRepository defines the interface for parametric SKU mapping data access
+type SKUMappingRepository interface {
+	FindBySelections(ctx context.Context, productID uuid.UUID, selections map[string]string) (*domain.SKUMapping, error)
+	ListByProductID(ctx context.Context, productID uuid.UUID) ([]domain.SKUMapping, error)
+}
+
 // AttributeTranslationRepository defines the interface for attribute translation data access
 type AttributeTranslationRepository interface {
 	GetByKey(ctx context.Context, tenantID uuid.UUID, attributeKey, locale string) (*domain.AttributeTranslation, error)

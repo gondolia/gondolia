@@ -8,7 +8,7 @@ function ensureLeadingSlash(url: string | undefined): string | undefined {
 }
 
 // Product Types
-export type ProductType = 'simple' | 'variant_parent' | 'variant';
+export type ProductType = 'simple' | 'variant_parent' | 'variant' | 'parametric';
 
 // Variant Axis Definition
 export interface VariantAxis {
@@ -17,6 +17,32 @@ export interface VariantAxis {
   position: number;
   label: Record<string, string>; // i18n labels
   options: AxisOption[];
+  inputType?: 'select' | 'range'; // 'select' (default) or 'range' for parametric
+  minValue?: number;
+  maxValue?: number;
+  stepValue?: number;
+  unit?: string;
+}
+
+// Parametric pricing configuration
+export interface ParametricPricing {
+  id: string;
+  productId: string;
+  formulaType: string; // 'fixed' | 'per_unit' | 'per_m2' | 'per_running_meter'
+  basePrice: number;
+  unitPrice?: number;
+  currency: string;
+  minOrderValue?: number;
+}
+
+// Parametric price calculation response
+export interface ParametricPriceResponse {
+  sku: string;
+  unitPrice: number;
+  totalPrice: number;
+  currency: string;
+  quantity: number;
+  breakdown?: Record<string, number>;
 }
 
 // Axis Option (einzelner Wert einer Achse)
@@ -99,6 +125,9 @@ export interface Product {
   // Variant-specific (nur bei variant)
   parentSummary?: { id: string; sku: string; name: Record<string, string> };
   axisValues?: AxisValueEntry[];
+  
+  // Parametric-specific (nur bei parametric)
+  parametricPricing?: ParametricPricing;
 }
 
 export interface Category {
@@ -144,6 +173,11 @@ export interface ApiVariantAxis {
   position: number;
   label?: Record<string, string>;
   options?: ApiAxisOption[];
+  input_type?: 'select' | 'range';
+  min_value?: number;
+  max_value?: number;
+  step_value?: number;
+  unit?: string;
 }
 
 export interface ApiAxisOption {
@@ -303,6 +337,18 @@ export function mapApiProduct(api: ApiProduct): Product {
     return val.de || val.en || '';
   };
 
+  // Find the primary image URL from the images array (prefers is_primary=true, falls back to first)
+  const getPrimaryImageUrl = (
+    images: string[] | Array<{ url: string; is_primary?: boolean; sort_order?: number }> | undefined
+  ): string | undefined => {
+    if (!images || images.length === 0) return undefined;
+    if (typeof images[0] === 'string') return images[0] as string;
+    const objImages = images as Array<{ url: string; is_primary?: boolean; sort_order?: number }>;
+    const primary = objImages.find(img => img.is_primary === true);
+    const img = primary || objImages[0];
+    return img?.url;
+  };
+
   // Convert attributes array to record
   const attributes: Record<string, string> = {};
   if (Array.isArray(api.attributes)) {
@@ -343,6 +389,11 @@ export function mapApiProduct(api: ApiProduct): Product {
       position: axis.position,
       label: axis.label || { de: axis.attribute_code.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) },
       options,
+      inputType: axis.input_type || 'select',
+      minValue: axis.min_value,
+      maxValue: axis.max_value,
+      stepValue: axis.step_value,
+      unit: axis.unit,
     };
   });
 
@@ -390,7 +441,7 @@ export function mapApiProduct(api: ApiProduct): Product {
     minOrderQuantity: api.min_order_quantity || 1,
     stockQuantity: api.stock_quantity || 0,
     isActive: api.is_active ?? (api.status === 'active'),
-    imageUrl: ensureLeadingSlash(api.image_url || (api.images && api.images.length > 0 ? (typeof api.images[0] === 'string' ? api.images[0] : api.images[0]?.url) : undefined)),
+    imageUrl: ensureLeadingSlash(api.image_url || getPrimaryImageUrl(api.images)),
     images: api.images?.map((img: string | { url: string }) => ensureLeadingSlash(typeof img === 'string' ? img : img.url)).filter((url): url is string => url !== undefined),
     attributes,
     createdAt: api.created_at,
