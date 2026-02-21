@@ -13,13 +13,15 @@ import (
 // ProductService handles product business logic
 type ProductService struct {
 	productRepo   repository.ProductRepository
+	priceRepo     repository.PriceRepository
 	attrTransRepo repository.AttributeTranslationRepository
 }
 
 // NewProductService creates a new product service
-func NewProductService(productRepo repository.ProductRepository, attrTransRepo repository.AttributeTranslationRepository) *ProductService {
+func NewProductService(productRepo repository.ProductRepository, priceRepo repository.PriceRepository, attrTransRepo repository.AttributeTranslationRepository) *ProductService {
 	return &ProductService{
 		productRepo:   productRepo,
+		priceRepo:     priceRepo,
 		attrTransRepo: attrTransRepo,
 	}
 }
@@ -34,7 +36,8 @@ func (s *ProductService) GetBySKU(ctx context.Context, tenantID uuid.UUID, sku s
 	return s.productRepo.GetBySKU(ctx, tenantID, sku)
 }
 
-// List retrieves products with filtering and pagination
+// List retrieves products with filtering and pagination.
+// For variant_parent products, enriches with variant_count, price_range and variant_summary.
 func (s *ProductService) List(ctx context.Context, filter domain.ProductFilter) ([]domain.Product, int, error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
@@ -42,7 +45,84 @@ func (s *ProductService) List(ctx context.Context, filter domain.ProductFilter) 
 	if filter.Limit > 200 {
 		filter.Limit = 200
 	}
-	return s.productRepo.List(ctx, filter)
+
+	products, total, err := s.productRepo.List(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Enrich variant_parent products with variant metadata
+	for i := range products {
+		if products[i].ProductType != domain.ProductTypeVariantParent {
+			continue
+		}
+		s.enrichVariantParentListData(ctx, &products[i])
+	}
+
+	return products, total, nil
+}
+
+// enrichVariantParentListData adds variant_count, price_range and variant_summary
+// to a variant_parent product for list/card display.
+func (s *ProductService) enrichVariantParentListData(ctx context.Context, product *domain.Product) {
+	variants, err := s.productRepo.ListVariants(ctx, product.ID, domain.ProductStatusActive)
+	if err != nil || len(variants) == 0 {
+		return
+	}
+
+	// Variant count
+	count := len(variants)
+	product.VariantCount = &count
+
+	// Price range — collect from prices table
+	var minPrice, maxPrice float64
+	var currency string
+	priceFound := false
+	for _, v := range variants {
+		prices, err := s.priceRepo.ListByProduct(ctx, v.ID)
+		if err != nil || len(prices) == 0 {
+			continue
+		}
+		basePrice := prices[0] // First price (lowest min_quantity)
+		if !priceFound || basePrice.Price < minPrice {
+			minPrice = basePrice.Price
+		}
+		if !priceFound || basePrice.Price > maxPrice {
+			maxPrice = basePrice.Price
+		}
+		currency = basePrice.Currency
+		priceFound = true
+	}
+	if priceFound {
+		product.VariantPriceRange = &domain.PriceRange{
+			Min:      minPrice,
+			Max:      maxPrice,
+			Currency: currency,
+		}
+	}
+
+	// Variant summary — collect unique axis value labels per axis
+	summary := make(map[string][]string)
+	seen := make(map[string]map[string]bool) // axis -> set of codes
+	for _, v := range variants {
+		axisValues, err := s.productRepo.GetAxisValues(ctx, v.ID)
+		if err != nil {
+			continue
+		}
+		for _, av := range axisValues {
+			if seen[av.AxisAttributeCode] == nil {
+				seen[av.AxisAttributeCode] = make(map[string]bool)
+			}
+			if !seen[av.AxisAttributeCode][av.OptionCode] {
+				seen[av.AxisAttributeCode][av.OptionCode] = true
+				label := formatOptionLabelSimple(av.OptionCode)
+				summary[av.AxisAttributeCode] = append(summary[av.AxisAttributeCode], label)
+			}
+		}
+	}
+	if len(summary) > 0 {
+		product.VariantSummary = summary
+	}
 }
 
 // Create creates a new product

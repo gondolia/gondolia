@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -13,12 +14,14 @@ import (
 // VariantService handles variant product business logic
 type VariantService struct {
 	productRepo repository.ProductRepository
+	priceRepo   repository.PriceRepository
 }
 
 // NewVariantService creates a new variant service
-func NewVariantService(productRepo repository.ProductRepository) *VariantService {
+func NewVariantService(productRepo repository.ProductRepository, priceRepo repository.PriceRepository) *VariantService {
 	return &VariantService{
 		productRepo: productRepo,
+		priceRepo:   priceRepo,
 	}
 }
 
@@ -33,6 +36,11 @@ func (s *VariantService) CreateVariantParent(ctx context.Context, tenantID uuid.
 	// Validate: at least one axis required
 	if len(req.VariantAxes) == 0 {
 		return nil, fmt.Errorf("variant parent must have at least one variant axis")
+	}
+
+	// Validate: max 4 axes (design decision 11.1)
+	if len(req.VariantAxes) > domain.MaxVariantAxes {
+		return nil, domain.ErrTooManyAxes
 	}
 
 	// Create parent product
@@ -146,7 +154,54 @@ func (s *VariantService) CreateVariant(ctx context.Context, tenantID uuid.UUID, 
 
 // GetProductWithVariants retrieves a product with all its variants (if parent)
 func (s *VariantService) GetProductWithVariants(ctx context.Context, id uuid.UUID) (*domain.Product, error) {
-	return s.productRepo.GetProductWithVariants(ctx, id)
+	product, err := s.productRepo.GetProductWithVariants(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Enrich each variant with price and availability data
+	if product.ProductType == domain.ProductTypeVariantParent && s.priceRepo != nil {
+		for i := range product.Variants {
+			prices, err := s.priceRepo.ListByProduct(ctx, product.Variants[i].ID)
+			if err != nil || len(prices) == 0 {
+				continue
+			}
+
+			// Build tier prices; pick base price = lowest min_quantity without customer group
+			tierPrices := make([]domain.TierPrice, 0, len(prices))
+			var basePrice float64
+			var currency string
+			for _, p := range prices {
+				tierPrices = append(tierPrices, domain.TierPrice{
+					MinQuantity: p.MinQuantity,
+					Price:       p.Price,
+				})
+				// Prefer public price (no customer group) with min_quantity == 1
+				if p.CustomerGroupID == nil && (basePrice == 0 || p.MinQuantity < 2) {
+					basePrice = p.Price
+					currency = strings.TrimSpace(p.Currency)
+				}
+			}
+			// Fallback: use first price if no public price found
+			if basePrice == 0 {
+				basePrice = prices[0].Price
+				currency = strings.TrimSpace(prices[0].Currency)
+			}
+
+			product.Variants[i].Price = &domain.VariantPrice{
+				Net:        basePrice,
+				Currency:   currency,
+				TierPrices: tierPrices,
+			}
+
+			inStock := true
+			product.Variants[i].Stock = &domain.VariantAvailability{
+				InStock: inStock,
+			}
+		}
+	}
+
+	return product, nil
 }
 
 // ListVariants returns all variants for a parent product
@@ -154,17 +209,65 @@ func (s *VariantService) ListVariants(ctx context.Context, parentID uuid.UUID, s
 	return s.productRepo.ListVariants(ctx, parentID, status...)
 }
 
-// SelectVariant finds a variant by axis values
+// SelectVariant finds a variant by axis values, resolves images and generates display name
 func (s *VariantService) SelectVariant(ctx context.Context, parentID uuid.UUID, axisValues map[string]string) (*domain.Product, error) {
 	variant, err := s.productRepo.FindVariantByAxisValues(ctx, parentID, axisValues)
 	if err != nil {
 		return nil, fmt.Errorf("variant not found for selected values: %w", err)
 	}
 
-	// Load axis values for the variant
+	// Load axis values for the variant (with labels for name generation)
 	values, err := s.productRepo.GetAxisValues(ctx, variant.ID)
 	if err == nil {
+		// Enrich axis values with labels (using shared helpers from label_helpers.go)
+		for i := range values {
+			values[i].OptionLabel = formatOptionLabel(values[i].OptionCode)
+			values[i].AxisLabel = formatAxisLabel(values[i].AxisAttributeCode)
+		}
 		variant.AxisValues = values
+	}
+
+	// Load prices for this variant (including tier/staffel prices)
+	if s.priceRepo != nil {
+		prices, err := s.priceRepo.ListByProduct(ctx, variant.ID)
+		if err == nil && len(prices) > 0 {
+			tierPrices := make([]domain.TierPrice, 0, len(prices))
+			var basePrice float64
+			var currency string
+			for _, p := range prices {
+				tierPrices = append(tierPrices, domain.TierPrice{
+					MinQuantity: p.MinQuantity,
+					Price:       p.Price,
+				})
+				if p.MinQuantity <= 1 || basePrice == 0 {
+					basePrice = p.Price
+					currency = p.Currency
+				}
+			}
+			variant.Price = &domain.VariantPrice{
+				Net:        basePrice,
+				Currency:   currency,
+				TierPrices: tierPrices,
+			}
+		}
+	}
+
+	// Load parent for image inheritance and name generation
+	parent, err := s.productRepo.GetByID(ctx, parentID)
+	if err == nil {
+		// Design decision 11.4: variant images replace parent images
+		variant.Images = domain.GetEffectiveImages(variant.Images, parent.Images)
+
+		// Design decision 11.5: auto-generate name if variant has no own name
+		for locale := range parent.Name {
+			if existing, ok := variant.Name[locale]; !ok || existing == "" || existing == parent.Name[locale] {
+				generated := domain.GenerateVariantName(parent.Name, values, locale)
+				if variant.Name == nil {
+					variant.Name = make(map[string]string)
+				}
+				variant.Name[locale] = generated
+			}
+		}
 	}
 
 	return variant, nil

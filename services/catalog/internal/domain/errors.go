@@ -24,6 +24,10 @@ var (
 	ErrTenantNotFound  = errors.New("tenant not found")
 	ErrTenantNotActive = errors.New("tenant is not active")
 
+	// Variant errors
+	ErrTooManyAxes                = errors.New("variant parent cannot have more than 4 axes")
+	ErrDuplicateVariantCombination = errors.New("variant with these axis values already exists")
+
 	// General errors
 	ErrUnauthorized = errors.New("unauthorized")
 	ErrForbidden    = errors.New("forbidden")
@@ -44,5 +48,7 @@ func IsValidationError(err error) bool {
 		errors.Is(err, ErrCategoryCircularRef) ||
 		errors.Is(err, ErrPriceInvalidRange) ||
 		errors.Is(err, ErrPriceOverlap) ||
-		errors.Is(err, ErrProductInvalidStatus)
+		errors.Is(err, ErrProductInvalidStatus) ||
+		errors.Is(err, ErrTooManyAxes) ||
+		errors.Is(err, ErrDuplicateVariantCombination)
 }

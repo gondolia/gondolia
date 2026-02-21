@@ -22,6 +22,7 @@ const (
 	ProductTypeSimple        ProductType = "simple"
 	ProductTypeVariantParent ProductType = "variant_parent"
 	ProductTypeVariant       ProductType = "variant"
+	ProductTypeParametric    ProductType = "parametric"
 )
 
 // AttributeType represents the data type of a product attribute
@@ -59,6 +60,24 @@ type Product struct {
 	VariantAxes      []VariantAxis      `json:"variant_axes,omitempty"`       // Only for variant_parent
 	Variants         []ProductVariant   `json:"variants,omitempty"`           // Only for variant_parent
 	AxisValues       []AxisValueEntry   `json:"axis_values,omitempty"`        // Only for variant
+
+	// Populated in list responses for variant_parent products
+	VariantCount      *int               `json:"variant_count,omitempty"`      // Number of active variants
+	VariantPriceRange *PriceRange        `json:"price_range,omitempty"`        // Min/max price across variants
+	VariantSummary    map[string][]string `json:"variant_summary,omitempty"`   // axis_code -> list of labels
+
+	// Populated when loading a variant directly (design decision 11.3)
+	ParentSummary *ParentSummary `json:"parent_summary,omitempty"` // Only for variant type
+
+	// Populated by SelectVariant — inline price for the selected variant
+	Price *VariantPrice `json:"price,omitempty"`
+}
+
+// ParentSummary provides parent context when a variant is loaded directly
+type ParentSummary struct {
+	ID   uuid.UUID         `json:"id"`
+	SKU  string            `json:"sku"`
+	Name map[string]string `json:"name"`
 }
 
 // ProductAttribute represents a flexible product attribute

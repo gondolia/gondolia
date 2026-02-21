@@ -69,6 +69,19 @@ export function ProductCard({ product }: ProductCardProps) {
           <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2 min-h-[3rem]">
             {product.name}
           </h3>
+          {product.productType === 'variant_parent' && product.variantSummary && (
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(product.variantSummary).slice(0, 2).map(([axis, values]) => (
+                <span
+                  key={axis}
+                  className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded"
+                >
+                  {values.slice(0, 4).join(", ")}
+                  {values.length > 4 && ` +${values.length - 4}`}
+                </span>
+              ))}
+            </div>
+          )}
           {product.shortDescription && (
             <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
               {product.shortDescription}

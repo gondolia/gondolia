@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/gondolia/gondolia/services/catalog/internal/domain"
-	"github.com/gondolia/gondolia/services/catalog/internal/service"
 )
 
 // TestVariantService_validateAxisValues tests the axis validation logic

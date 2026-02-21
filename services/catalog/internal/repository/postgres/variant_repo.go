@@ -77,6 +77,46 @@ func (r *ProductRepository) GetProductWithVariants(ctx context.Context, id uuid.
 		return nil, err
 	}
 
+	// If this is a variant (child), enrich with parent summary + effective images/name
+	if product.ProductType == domain.ProductTypeVariant && product.ParentID != nil {
+		parent, err := r.GetByID(ctx, *product.ParentID)
+		if err == nil {
+			product.ParentSummary = &domain.ParentSummary{
+				ID:   parent.ID,
+				SKU:  parent.SKU,
+				Name: parent.Name,
+			}
+			// Design decision 11.4: image inheritance
+			product.Images = domain.GetEffectiveImages(product.Images, parent.Images)
+			// Load axis values with labels
+			axisValues, err := r.GetAxisValues(ctx, product.ID)
+			if err == nil {
+				for i := range axisValues {
+					axisValues[i].OptionLabel = formatOptionLabel(axisValues[i].OptionCode)
+					axisValues[i].AxisLabel = formatAxisLabel(axisValues[i].AxisAttributeCode)
+				}
+				product.AxisValues = axisValues
+				// Design decision 11.5: auto-generate name
+				for locale := range parent.Name {
+					if existing, ok := product.Name[locale]; !ok || existing == "" || existing == parent.Name[locale] {
+						product.Name[locale] = domain.GenerateVariantName(parent.Name, axisValues, locale)
+					}
+				}
+			}
+		}
+		return product, nil
+	}
+
+	// For parametric products: load axes (options are enriched in the handler)
+	if product.ProductType == domain.ProductTypeParametric {
+		axes, err := r.GetVariantAxes(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load parametric axes: %w", err)
+		}
+		product.VariantAxes = axes
+		return product, nil
+	}
+
 	// If not a variant parent, return as-is
 	if product.ProductType != domain.ProductTypeVariantParent {
 		return product, nil
@@ -102,12 +142,15 @@ func (r *ProductRepository) GetProductWithVariants(ctx context.Context, id uuid.
 			axisValuesMap[av.AxisAttributeCode] = av.OptionCode
 		}
 
+		// Design decision 11.4: variant images replace parent images
+		effectiveImages := domain.GetEffectiveImages(variant.Images, product.Images)
+
 		product.Variants[i] = domain.ProductVariant{
 			ID:         variant.ID,
 			SKU:        variant.SKU,
 			AxisValues: axisValuesMap,
 			Status:     variant.Status,
-			Images:     variant.Images,
+			Images:     effectiveImages,
 		}
 	}
 
@@ -311,10 +354,14 @@ func (r *ProductRepository) SetVariantAxes(ctx context.Context, parentID uuid.UU
 
 	// Insert new axes
 	for _, axis := range axes {
+		var unit *string
+		if axis.Unit != "" {
+			unit = &axis.Unit
+		}
 		_, err = tx.Exec(ctx, `
-			INSERT INTO variant_axes (id, product_id, attribute_code, position)
-			VALUES ($1, $2, $3, $4)
-		`, axis.ID, parentID, axis.AttributeCode, axis.Position)
+			INSERT INTO variant_axes (id, product_id, attribute_code, position, input_type, min_value, max_value, step_value, unit)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`, axis.ID, parentID, axis.AttributeCode, axis.Position, axis.InputType, axis.MinValue, axis.MaxValue, axis.StepValue, unit)
 		if err != nil {
 			return err
 		}
@@ -326,7 +373,8 @@ func (r *ProductRepository) SetVariantAxes(ctx context.Context, parentID uuid.UU
 // GetVariantAxes retrieves all variant axes for a parent product
 func (r *ProductRepository) GetVariantAxes(ctx context.Context, parentID uuid.UUID) ([]domain.VariantAxis, error) {
 	query := `
-		SELECT id, product_id, attribute_code, position
+		SELECT id, product_id, attribute_code, position,
+		       input_type, min_value, max_value, step_value, unit
 		FROM variant_axes
 		WHERE product_id = $1
 		ORDER BY position
@@ -341,8 +389,13 @@ func (r *ProductRepository) GetVariantAxes(ctx context.Context, parentID uuid.UU
 	var axes []domain.VariantAxis
 	for rows.Next() {
 		var axis domain.VariantAxis
-		if err := rows.Scan(&axis.ID, &axis.ProductID, &axis.AttributeCode, &axis.Position); err != nil {
+		var unit *string
+		if err := rows.Scan(&axis.ID, &axis.ProductID, &axis.AttributeCode, &axis.Position,
+			&axis.InputType, &axis.MinValue, &axis.MaxValue, &axis.StepValue, &unit); err != nil {
 			return nil, err
+		}
+		if unit != nil {
+			axis.Unit = *unit
 		}
 		axes = append(axes, axis)
 	}

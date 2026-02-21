@@ -72,9 +72,54 @@ func (m *MockProductRepository) Delete(ctx context.Context, id uuid.UUID) error 
 	return nil
 }
 
+// Variant-specific methods (no-op for product tests)
+func (m *MockProductRepository) GetProductWithVariants(ctx context.Context, id uuid.UUID) (*domain.Product, error) {
+	return m.GetByID(ctx, id)
+}
+func (m *MockProductRepository) ListVariants(ctx context.Context, parentID uuid.UUID, status ...domain.ProductStatus) ([]domain.Product, error) {
+	return nil, nil
+}
+func (m *MockProductRepository) FindVariantByAxisValues(ctx context.Context, parentID uuid.UUID, axisValues map[string]string) (*domain.Product, error) {
+	return nil, domain.ErrProductNotFound
+}
+func (m *MockProductRepository) GetAvailableAxisValues(ctx context.Context, parentID uuid.UUID, selected map[string]string) (map[string][]domain.AxisOption, error) {
+	return nil, nil
+}
+func (m *MockProductRepository) SetVariantAxes(ctx context.Context, parentID uuid.UUID, axes []domain.VariantAxis) error {
+	return nil
+}
+func (m *MockProductRepository) GetVariantAxes(ctx context.Context, parentID uuid.UUID) ([]domain.VariantAxis, error) {
+	return nil, nil
+}
+func (m *MockProductRepository) SetAxisValues(ctx context.Context, variantID uuid.UUID, values []domain.AxisValueEntry) error {
+	return nil
+}
+func (m *MockProductRepository) GetAxisValues(ctx context.Context, variantID uuid.UUID) ([]domain.AxisValueEntry, error) {
+	return nil, nil
+}
+
+// MockPriceRepository for product service tests
+type MockPriceRepository struct{}
+
+func (m *MockPriceRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Price, error) {
+	return nil, domain.ErrPriceNotFound
+}
+func (m *MockPriceRepository) ListByProduct(ctx context.Context, productID uuid.UUID) ([]domain.Price, error) {
+	return nil, nil
+}
+func (m *MockPriceRepository) List(ctx context.Context, filter domain.PriceFilter) ([]domain.Price, int, error) {
+	return nil, 0, nil
+}
+func (m *MockPriceRepository) Create(ctx context.Context, price *domain.Price) error { return nil }
+func (m *MockPriceRepository) Update(ctx context.Context, price *domain.Price) error { return nil }
+func (m *MockPriceRepository) Delete(ctx context.Context, id uuid.UUID) error        { return nil }
+func (m *MockPriceRepository) CheckOverlap(ctx context.Context, price *domain.Price) (bool, error) {
+	return false, nil
+}
+
 func TestProductService_Create(t *testing.T) {
 	repo := NewMockProductRepository()
-	service := NewProductService(repo)
+	service := NewProductService(repo, &MockPriceRepository{}, nil)
 	ctx := context.Background()
 	tenantID := uuid.New()
 
@@ -113,7 +158,7 @@ func TestProductService_Create(t *testing.T) {
 
 func TestProductService_GetByID(t *testing.T) {
 	repo := NewMockProductRepository()
-	service := NewProductService(repo)
+	service := NewProductService(repo, &MockPriceRepository{}, nil)
 	ctx := context.Background()
 
 	// Test non-existent product
@@ -139,7 +184,7 @@ func TestProductService_GetByID(t *testing.T) {
 
 func TestProductService_Update(t *testing.T) {
 	repo := NewMockProductRepository()
-	service := NewProductService(repo)
+	service := NewProductService(repo, &MockPriceRepository{}, nil)
 	ctx := context.Background()
 
 	tenantID := uuid.New()
@@ -170,7 +215,7 @@ func TestProductService_Update(t *testing.T) {
 
 func TestProductService_Delete(t *testing.T) {
 	repo := NewMockProductRepository()
-	service := NewProductService(repo)
+	service := NewProductService(repo, &MockPriceRepository{}, nil)
 	ctx := context.Background()
 
 	tenantID := uuid.New()

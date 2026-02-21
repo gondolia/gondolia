@@ -135,7 +135,7 @@ export function VariantSelector({
         {sortedAxes.map((axis, axisIdx) => {
           const axisLabel = getLabel(axis.label);
           const options = [...axis.options].sort((a, b) => a.position - b.position);
-          const useDropdown = options.length > 8; // Erhöht von 6 auf 8
+          const useDropdown = options.length > 6; // Design decision: >6 → Dropdown
           const isCurrentAxisSelected = !!selectedValues[axis.attributeCode];
 
           return (
