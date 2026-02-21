@@ -22,7 +22,7 @@ func NewCategoryRepository(db *DB) *CategoryRepository {
 
 func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Category, error) {
 	query := `
-		SELECT id, tenant_id, code, parent_id, name, sort_order, active,
+		SELECT id, tenant_id, code, parent_id, name, description, image, sort_order, active,
 		       pim_code, last_synced_at, created_at, updated_at, deleted_at
 		FROM categories
 		WHERE id = $1 AND deleted_at IS NULL
@@ -50,9 +50,9 @@ func (r *CategoryRepository) GetAncestors(ctx context.Context, id uuid.UUID) ([]
 	query := `
 		WITH RECURSIVE ancestors AS (
 			-- Start with the parent of the given category
-			SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.sort_order, c.active,
-			       c.pim_code, c.last_synced_at, c.created_at, c.updated_at, c.deleted_at,
-			       1 as depth
+			SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.description, c.image, 
+			       c.sort_order, c.active, c.pim_code, c.last_synced_at, 
+			       c.created_at, c.updated_at, c.deleted_at, 1 as depth
 			FROM categories c
 			INNER JOIN categories child ON child.parent_id = c.id
 			WHERE child.id = $1 AND c.deleted_at IS NULL
@@ -60,14 +60,14 @@ func (r *CategoryRepository) GetAncestors(ctx context.Context, id uuid.UUID) ([]
 			UNION ALL
 			
 			-- Recursively get parent categories
-			SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.sort_order, c.active,
-			       c.pim_code, c.last_synced_at, c.created_at, c.updated_at, c.deleted_at,
-			       a.depth + 1
+			SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.description, c.image,
+			       c.sort_order, c.active, c.pim_code, c.last_synced_at,
+			       c.created_at, c.updated_at, c.deleted_at, a.depth + 1
 			FROM categories c
 			INNER JOIN ancestors a ON a.parent_id = c.id
 			WHERE c.deleted_at IS NULL
 		)
-		SELECT id, tenant_id, code, parent_id, name, sort_order, active,
+		SELECT id, tenant_id, code, parent_id, name, description, image, sort_order, active,
 		       pim_code, last_synced_at, created_at, updated_at, deleted_at
 		FROM ancestors
 		ORDER BY depth DESC
@@ -93,7 +93,7 @@ func (r *CategoryRepository) GetAncestors(ctx context.Context, id uuid.UUID) ([]
 
 func (r *CategoryRepository) GetByCode(ctx context.Context, tenantID uuid.UUID, code string) (*domain.Category, error) {
 	query := `
-		SELECT id, tenant_id, code, parent_id, name, sort_order, active,
+		SELECT id, tenant_id, code, parent_id, name, description, image, sort_order, active,
 		       pim_code, last_synced_at, created_at, updated_at, deleted_at
 		FROM categories
 		WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
@@ -106,7 +106,7 @@ func (r *CategoryRepository) GetTree(ctx context.Context, tenantID uuid.UUID) ([
 	query := `
 		WITH RECURSIVE category_tree AS (
 			-- Root categories
-			SELECT id, tenant_id, code, parent_id, name, sort_order, active,
+			SELECT id, tenant_id, code, parent_id, name, description, image, sort_order, active,
 			       pim_code, last_synced_at, created_at, updated_at, deleted_at, 0 as depth
 			FROM categories
 			WHERE tenant_id = $1 AND parent_id IS NULL AND deleted_at IS NULL
@@ -114,8 +114,9 @@ func (r *CategoryRepository) GetTree(ctx context.Context, tenantID uuid.UUID) ([
 			UNION ALL
 			
 			-- Child categories
-			SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.sort_order, c.active,
-			       c.pim_code, c.last_synced_at, c.created_at, c.updated_at, c.deleted_at, ct.depth + 1
+			SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.description, c.image,
+			       c.sort_order, c.active, c.pim_code, c.last_synced_at, 
+			       c.created_at, c.updated_at, c.deleted_at, ct.depth + 1
 			FROM categories c
 			INNER JOIN category_tree ct ON c.parent_id = ct.id
 			WHERE c.deleted_at IS NULL
@@ -139,8 +140,9 @@ func (r *CategoryRepository) GetTree(ctx context.Context, tenantID uuid.UUID) ([
 			LEFT JOIN products p ON cd.descendant_id = ANY(p.category_ids) AND p.deleted_at IS NULL
 			GROUP BY cd.id
 		)
-		SELECT ct.id, ct.tenant_id, ct.code, ct.parent_id, ct.name, ct.sort_order, ct.active,
-		       ct.pim_code, ct.last_synced_at, ct.created_at, ct.updated_at, ct.deleted_at,
+		SELECT ct.id, ct.tenant_id, ct.code, ct.parent_id, ct.name, ct.description, ct.image,
+		       ct.sort_order, ct.active, ct.pim_code, ct.last_synced_at, 
+		       ct.created_at, ct.updated_at, ct.deleted_at,
 		       COALESCE(cpc.product_count, 0) as product_count
 		FROM category_tree ct
 		LEFT JOIN category_product_counts cpc ON ct.id = cpc.category_id
@@ -205,37 +207,33 @@ func (r *CategoryRepository) List(ctx context.Context, filter domain.CategoryFil
 		return nil, 0, err
 	}
 
-	// Data query with product counts
+	// Data query with product counts per category (including descendants)
+	// Uses LATERAL join with recursive CTE per category for correct per-row counts
 	query := fmt.Sprintf(`
-		WITH RECURSIVE child_categories AS (
-			-- Start with the filtered categories
-			SELECT id, parent_id
-			FROM categories
-			WHERE %s
-			
-			UNION ALL
-			
-			-- Get all descendants
-			SELECT c.id, c.parent_id
-			FROM categories c
-			INNER JOIN child_categories cc ON c.parent_id = cc.id
-			WHERE c.deleted_at IS NULL
-		)
-		SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.sort_order, c.active,
-		       c.pim_code, c.last_synced_at, c.created_at, c.updated_at, c.deleted_at,
-		       COALESCE((
-		           SELECT COUNT(*)::int
-		           FROM products p
-		           WHERE EXISTS (
-		               SELECT 1 FROM child_categories cc
-		               WHERE cc.id = ANY(p.category_ids)
-		           ) AND p.deleted_at IS NULL
-		       ), 0) as product_count
+		SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.description, c.image,
+		       c.sort_order, c.active, c.pim_code, c.last_synced_at, 
+		       c.created_at, c.updated_at, c.deleted_at,
+		       COALESCE(pc.cnt, 0) as product_count
 		FROM categories c
+		LEFT JOIN LATERAL (
+		    WITH RECURSIVE descendants AS (
+		        SELECT c.id AS cat_id
+		        UNION ALL
+		        SELECT ch.id
+		        FROM categories ch
+		        INNER JOIN descendants d ON ch.parent_id = d.cat_id
+		        WHERE ch.deleted_at IS NULL
+		    )
+		    SELECT COUNT(DISTINCT p.id)::int AS cnt
+		    FROM products p
+		    WHERE EXISTS (
+		        SELECT 1 FROM descendants d WHERE d.cat_id = ANY(p.category_ids)
+		    ) AND p.deleted_at IS NULL
+		) pc ON true
 		WHERE %s
 		ORDER BY c.sort_order, c.code
 		LIMIT $%d OFFSET $%d
-	`, whereClause, whereClause, argNum, argNum+1)
+	`, whereClause, argNum, argNum+1)
 
 	args = append(args, filter.Limit, filter.Offset)
 
@@ -260,13 +258,14 @@ func (r *CategoryRepository) List(ctx context.Context, filter domain.CategoryFil
 func (r *CategoryRepository) Create(ctx context.Context, category *domain.Category) error {
 	// Marshal JSON fields
 	nameJSON, _ := json.Marshal(category.Name)
+	descriptionJSON, _ := json.Marshal(category.Description)
 
 	query := `
 		INSERT INTO categories (
-			id, tenant_id, code, parent_id, name, sort_order, active,
+			id, tenant_id, code, parent_id, name, description, image, sort_order, active,
 			pim_code, last_synced_at, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 		)
 	`
 
@@ -276,6 +275,8 @@ func (r *CategoryRepository) Create(ctx context.Context, category *domain.Catego
 		category.Code,
 		category.ParentID,
 		nameJSON,
+		descriptionJSON,
+		category.Image,
 		category.SortOrder,
 		category.Active,
 		category.PIMCode,
@@ -297,22 +298,27 @@ func (r *CategoryRepository) Create(ctx context.Context, category *domain.Catego
 func (r *CategoryRepository) Update(ctx context.Context, category *domain.Category) error {
 	// Marshal JSON fields
 	nameJSON, _ := json.Marshal(category.Name)
+	descriptionJSON, _ := json.Marshal(category.Description)
 
 	query := `
 		UPDATE categories SET
 			parent_id = $1,
 			name = $2,
-			sort_order = $3,
-			active = $4,
-			pim_code = $5,
-			last_synced_at = $6,
-			updated_at = $7
-		WHERE id = $8 AND deleted_at IS NULL
+			description = $3,
+			image = $4,
+			sort_order = $5,
+			active = $6,
+			pim_code = $7,
+			last_synced_at = $8,
+			updated_at = $9
+		WHERE id = $10 AND deleted_at IS NULL
 	`
 
 	result, err := r.db.Pool.Exec(ctx, query,
 		category.ParentID,
 		nameJSON,
+		descriptionJSON,
+		category.Image,
 		category.SortOrder,
 		category.Active,
 		category.PIMCode,
@@ -364,7 +370,7 @@ func (r *CategoryRepository) HasProducts(ctx context.Context, id uuid.UUID) (boo
 
 func (r *CategoryRepository) scanCategory(row pgx.Row) (*domain.Category, error) {
 	var category domain.Category
-	var nameJSON []byte
+	var nameJSON, descriptionJSON []byte
 
 	err := row.Scan(
 		&category.ID,
@@ -372,6 +378,8 @@ func (r *CategoryRepository) scanCategory(row pgx.Row) (*domain.Category, error)
 		&category.Code,
 		&category.ParentID,
 		&nameJSON,
+		&descriptionJSON,
+		&category.Image,
 		&category.SortOrder,
 		&category.Active,
 		&category.PIMCode,
@@ -390,9 +398,13 @@ func (r *CategoryRepository) scanCategory(row pgx.Row) (*domain.Category, error)
 
 	// Unmarshal JSON fields
 	_ = json.Unmarshal(nameJSON, &category.Name)
+	_ = json.Unmarshal(descriptionJSON, &category.Description)
 
 	if category.Name == nil {
 		category.Name = make(map[string]string)
+	}
+	if category.Description == nil {
+		category.Description = make(map[string]string)
 	}
 
 	return &category, nil
@@ -400,7 +412,7 @@ func (r *CategoryRepository) scanCategory(row pgx.Row) (*domain.Category, error)
 
 func (r *CategoryRepository) scanCategoryFromRows(rows pgx.Rows) (*domain.Category, error) {
 	var category domain.Category
-	var nameJSON []byte
+	var nameJSON, descriptionJSON []byte
 
 	err := rows.Scan(
 		&category.ID,
@@ -408,6 +420,8 @@ func (r *CategoryRepository) scanCategoryFromRows(rows pgx.Rows) (*domain.Catego
 		&category.Code,
 		&category.ParentID,
 		&nameJSON,
+		&descriptionJSON,
+		&category.Image,
 		&category.SortOrder,
 		&category.Active,
 		&category.PIMCode,
@@ -423,9 +437,13 @@ func (r *CategoryRepository) scanCategoryFromRows(rows pgx.Rows) (*domain.Catego
 
 	// Unmarshal JSON fields
 	_ = json.Unmarshal(nameJSON, &category.Name)
+	_ = json.Unmarshal(descriptionJSON, &category.Description)
 
 	if category.Name == nil {
 		category.Name = make(map[string]string)
+	}
+	if category.Description == nil {
+		category.Description = make(map[string]string)
 	}
 
 	return &category, nil
@@ -433,7 +451,7 @@ func (r *CategoryRepository) scanCategoryFromRows(rows pgx.Rows) (*domain.Catego
 
 func (r *CategoryRepository) scanCategoryWithCountFromRows(rows pgx.Rows) (*domain.Category, error) {
 	var category domain.Category
-	var nameJSON []byte
+	var nameJSON, descriptionJSON []byte
 
 	err := rows.Scan(
 		&category.ID,
@@ -441,6 +459,8 @@ func (r *CategoryRepository) scanCategoryWithCountFromRows(rows pgx.Rows) (*doma
 		&category.Code,
 		&category.ParentID,
 		&nameJSON,
+		&descriptionJSON,
+		&category.Image,
 		&category.SortOrder,
 		&category.Active,
 		&category.PIMCode,
@@ -457,9 +477,13 @@ func (r *CategoryRepository) scanCategoryWithCountFromRows(rows pgx.Rows) (*doma
 
 	// Unmarshal JSON fields
 	_ = json.Unmarshal(nameJSON, &category.Name)
+	_ = json.Unmarshal(descriptionJSON, &category.Description)
 
 	if category.Name == nil {
 		category.Name = make(map[string]string)
+	}
+	if category.Description == nil {
+		category.Description = make(map[string]string)
 	}
 
 	return &category, nil

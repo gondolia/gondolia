@@ -78,6 +78,12 @@ func (s *CategoryService) Create(ctx context.Context, tenantID uuid.UUID, req do
 	category.ParentID = req.ParentID
 	category.Name = req.Name
 	
+	if req.Description != nil {
+		category.Description = req.Description
+	}
+	if req.Image != nil {
+		category.Image = req.Image
+	}
 	if req.SortOrder != nil {
 		category.SortOrder = *req.SortOrder
 	}
@@ -123,6 +129,12 @@ func (s *CategoryService) Update(ctx context.Context, id uuid.UUID, req domain.U
 	// Update fields
 	if req.Name != nil {
 		category.Name = req.Name
+	}
+	if req.Description != nil {
+		category.Description = req.Description
+	}
+	if req.Image != nil {
+		category.Image = req.Image
 	}
 	if req.SortOrder != nil {
 		category.SortOrder = *req.SortOrder

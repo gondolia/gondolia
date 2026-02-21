@@ -8,16 +8,18 @@ import (
 
 // Category represents a product category
 type Category struct {
-	ID        uuid.UUID         `json:"id"`
-	TenantID  uuid.UUID         `json:"tenant_id"`
-	Code      string            `json:"code"`
-	ParentID  *uuid.UUID        `json:"parent_id,omitempty"`
-	Name      map[string]string `json:"name"` // locale -> name
-	SortOrder int               `json:"sort_order"`
-	Active    bool              `json:"active"`
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
-	DeletedAt *time.Time        `json:"deleted_at,omitempty"`
+	ID          uuid.UUID         `json:"id"`
+	TenantID    uuid.UUID         `json:"tenant_id"`
+	Code        string            `json:"code"`
+	ParentID    *uuid.UUID        `json:"parent_id,omitempty"`
+	Name        map[string]string `json:"name"`        // locale -> name
+	Description map[string]string `json:"description"` // locale -> description
+	Image       *string           `json:"image_url,omitempty"`
+	SortOrder   int               `json:"sort_order"`
+	Active      bool              `json:"active"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
+	DeletedAt   *time.Time        `json:"deleted_at,omitempty"`
 
 	// PIM Integration
 	PIMCode      *string    `json:"pim_code,omitempty"`
@@ -43,6 +45,21 @@ func (c *Category) GetLocalizedName(locale string) string {
 	return ""
 }
 
+// GetLocalizedDescription returns the description in the specified locale or fallback
+func (c *Category) GetLocalizedDescription(locale string) string {
+	if c.Description == nil {
+		return ""
+	}
+	if desc, ok := c.Description[locale]; ok {
+		return desc
+	}
+	// Fallback to first available
+	for _, desc := range c.Description {
+		return desc
+	}
+	return ""
+}
+
 // IsRoot returns true if category has no parent
 func (c *Category) IsRoot() bool {
 	return c.ParentID == nil
@@ -52,33 +69,38 @@ func (c *Category) IsRoot() bool {
 func NewCategory(tenantID uuid.UUID, code string) *Category {
 	now := time.Now()
 	return &Category{
-		ID:        uuid.New(),
-		TenantID:  tenantID,
-		Code:      code,
-		Name:      make(map[string]string),
-		SortOrder: 0,
-		Active:    true,
-		CreatedAt: now,
-		UpdatedAt: now,
-		Children:  []Category{},
+		ID:          uuid.New(),
+		TenantID:    tenantID,
+		Code:        code,
+		Name:        make(map[string]string),
+		Description: make(map[string]string),
+		SortOrder:   0,
+		Active:      true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Children:    []Category{},
 	}
 }
 
 // CreateCategoryRequest represents a request to create a category
 type CreateCategoryRequest struct {
-	Code      string            `json:"code" binding:"required,min=1,max=100"`
-	ParentID  *uuid.UUID        `json:"parent_id,omitempty"`
-	Name      map[string]string `json:"name" binding:"required"`
-	SortOrder *int              `json:"sort_order,omitempty"`
-	Active    *bool             `json:"active,omitempty"`
+	Code        string            `json:"code" binding:"required,min=1,max=100"`
+	ParentID    *uuid.UUID        `json:"parent_id,omitempty"`
+	Name        map[string]string `json:"name" binding:"required"`
+	Description map[string]string `json:"description,omitempty"`
+	Image       *string           `json:"image,omitempty"`
+	SortOrder   *int              `json:"sort_order,omitempty"`
+	Active      *bool             `json:"active,omitempty"`
 }
 
 // UpdateCategoryRequest represents a request to update a category
 type UpdateCategoryRequest struct {
-	ParentID  *uuid.UUID        `json:"parent_id,omitempty"`
-	Name      map[string]string `json:"name,omitempty"`
-	SortOrder *int              `json:"sort_order,omitempty"`
-	Active    *bool             `json:"active,omitempty"`
+	ParentID    *uuid.UUID        `json:"parent_id,omitempty"`
+	Name        map[string]string `json:"name,omitempty"`
+	Description map[string]string `json:"description,omitempty"`
+	Image       *string           `json:"image,omitempty"`
+	SortOrder   *int              `json:"sort_order,omitempty"`
+	Active      *bool             `json:"active,omitempty"`
 }
 
 // CategoryFilter represents filter options for listing categories

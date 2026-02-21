@@ -58,38 +58,22 @@ export default function CategoryDetailPage() {
       const chain = await buildCategoryChain(categoryId);
       setCategoryChain(chain);
       
-      // Fetch category details (including children from tree)
+      // Fetch category details
       const categoryData = await apiClient.getCategory(categoryId);
       
-      // Fetch all categories to get the full tree structure
-      const categoryTree = await apiClient.getCategories();
-      
-      // Find this category in the tree to get populated children with product_count
-      const findInTree = (cats: Category[]): Category | null => {
-        for (const cat of cats) {
-          if (cat.id === categoryId) return cat;
-          if (cat.children) {
-            const found = findInTree(cat.children);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      
-      const categoryWithChildren = findInTree(categoryTree);
-      if (categoryWithChildren) {
-        // Use children from tree (they already have product_count from API)
-        categoryData.children = categoryWithChildren.children;
-        // Use product_count from tree (includes recursive count)
-        categoryData.productCount = categoryWithChildren.productCount;
-      }
+      // Fetch direct children with product counts (using List endpoint with parent_id filter)
+      const children = await apiClient.getChildCategories(categoryId);
+      categoryData.children = children;
 
       // Fetch products using server-side pagination with include_children=true
       const productsData = await apiClient.getCategoryProducts(categoryId, {
         page: currentPage,
         limit: 12,
-        includeChildren: true, // Backend now handles subcategory products
+        includeChildren: true, // Backend handles subcategory products recursively
       });
+      
+      // Use product total as category product count (includes all descendants)
+      categoryData.productCount = productsData.total;
       
       setProducts(productsData);
       setCategory(categoryData);
