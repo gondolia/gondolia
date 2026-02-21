@@ -71,3 +71,15 @@ server
 docs/architecture/
 @eaDir/
 frontend/public/images/
+
+# Temp build artifacts
+services/catalog/service_new
+
+# One-off scripts (not part of the project)
+analyze_variants.sh
+categorize_variants.py
+generate-variant-images.sh
+generate_variant_images.py
+test_openai_image.py
+scripts/generate-images-batch2.sh
+scripts/generate_product_images.py
