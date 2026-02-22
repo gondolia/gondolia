@@ -53,8 +53,8 @@ Referenz: `architecture/product-variants.md`
 - [ ] `PIMProvider` Interface erweitern: `FetchProductModels()`, `FetchVariantAxes()`, `SupportsVariants()`
 - [ ] `pim.ProductModelPage`, `pim.ProductModel`, `pim.VariantAxisDefinition` Structs
 - [ ] `SyncService.SyncProductModels()` — Provider-agnostischer Import
-- [ ] Akeneo-Provider: Referenz-Implementierung
-- [ ] Akeneo Level-Flachdrückung (2 Level → 1 Level)
+- [ ] PIM-Provider: Referenz-Implementierung
+- [ ] Level-Flachdrückung (2 Level → 1 Level, PIM-abhängig)
 - [ ] CSV/Excel-Provider: Minimal-Implementierung
 
 ### Phase 4: Frontend ✅ (Matrix-Ansicht separat)
@@ -169,7 +169,7 @@ Referenz: `architecture/product-types.md`, Abschnitt 4
 
 ### Warenkorb-Integration
 - [ ] `CartItem.BundleItems` Feld
-- [ ] Bundle-Auflösung (N Positionen) für SAP
+- [ ] Bundle-Auflösung (N Positionen) für ERP-Systeme
 
 ---
 
@@ -223,7 +223,7 @@ Referenz: `architecture/product-types.md`, Abschnitt 5
 
 ### Warenkorb-Integration
 - [ ] `CartItem.Configuration` Feld
-- [ ] Konfiguration → SAP-Stückliste (BOM) oder Einzelpositionen
+- [ ] Konfiguration → ERP-Stückliste (BOM) oder Einzelpositionen
 
 ---
 
@@ -257,17 +257,17 @@ Wird benötigt ab Meilenstein 3 (parametrisierbar), aber Design jetzt festlegen:
 
 - [ ] Generisches `CartItem`-Struct (product_type-spezifische Felder)
 - [ ] Cart-Service als eigener Microservice oder Teil von Catalog?
-- [ ] SAP/ERP-Mapping pro Produkttyp klären
+- [ ] ERP-Mapping pro Produkttyp klären
 
 ---
 
-## Übergreifend: SAP-Integration
+## Übergreifend: ERP-Integration
 
-Offene Fragen (aus product-types.md):
-- [ ] Unterstützt SAP Variantenkonfiguration (LO-VC)?
-- [ ] SAP-Materialnummern pro Variante oder nur Master?
-- [ ] Parametrische Produkte in SAP (CUOBJ / Merkmalsbewertung)?
-- [ ] Bundles als BOM oder Einzelpositionen?
+Offene Fragen:
+- [ ] ERP-Variantenkonfiguration Support?
+- [ ] Materialnummern pro Variante oder nur Master?
+- [ ] Parametrische Produkte im ERP (Merkmalsbewertung)?
+- [ ] Bundles als Stückliste (BOM) oder Einzelpositionen?
 
 ---
 

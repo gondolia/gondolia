@@ -150,26 +150,23 @@ Stand: 2026-02-22
 - Referenz: `docs/architecture/asset-management.md`
 
 ### PIM Integration
-- [ ] Akeneo/Pimcore Sync
-- [ ] Automatischer Produkt-Import
-- [ ] Attribut-Mapping
+- [ ] PIM Provider Interface (Sync, Import, Attribut-Mapping)
+- [ ] Referenz-Implementierung für gängige PIM-Systeme
 - Referenz: `docs/architecture/pim-attribute-system.md`
 
 ---
 
 ## Phase 6: Enterprise & Integration
 
-### SAP Integration
-- [ ] Kunden-Sync (BAPI)
-- [ ] Bestell-Sync
-- [ ] Preis/Bestand-Abgleich
-- [ ] gondolia-kuratle Private Repo
+### ERP Integration
+- [ ] ERP Provider Interface (Kunden, Bestellungen, Preise, Bestand)
+- [ ] Implementierungen via Provider Pattern in separaten Repos (private)
 - Referenz: `docs/architecture/adr-001-provider-pattern.md`
 
 ### Weitere Services
 - [ ] Notification Service (E-Mail, Push)
-- [ ] CMS (Headless, Payload)
-- [ ] Analytics (Conversion Funnel, PowerBI)
+- [ ] CMS (Headless)
+- [ ] Analytics (Conversion Funnel, Export)
 - [ ] Support Portal (Customer Journey Tracking)
 - [ ] KI-Assistent (RAG, Produktberatung)
 - [ ] Datahub (visuelle Integration-Konfiguration)
@@ -178,7 +175,6 @@ Stand: 2026-02-22
 - [ ] Theming-System
 - [ ] Multi-Instance Orchestration
 - [ ] SEO-freundliche URLs
-- Referenz: `docs/architecture/theming-multi-shop.md`, `seo-url-structure.md`
 
 ---
 
