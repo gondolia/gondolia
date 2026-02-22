@@ -371,6 +371,7 @@ export interface ProductSearchParams {
   minPrice?: number;
   maxPrice?: number;
   page?: number;
+  offset?: number;
   limit?: number;
   sortBy?: "name" | "price" | "created_at";
   sortOrder?: "asc" | "desc";

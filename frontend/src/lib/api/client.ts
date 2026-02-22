@@ -280,7 +280,10 @@ class ApiClient {
     
     // Backend uses offset/limit, not page
     const limit = params?.limit || 50;
-    const offset = params?.page ? (params.page - 1) * limit : 0;
+    // Direct offset takes precedence over page-based calculation
+    const offset = params?.offset !== undefined
+      ? params.offset
+      : params?.page ? (params.page - 1) * limit : 0;
     searchParams.set("limit", limit.toString());
     searchParams.set("offset", offset.toString());
     
@@ -418,13 +421,16 @@ class ApiClient {
 
   async getCategoryProducts(
     categoryId: string,
-    params?: { page?: number; limit?: number; includeChildren?: boolean }
+    params?: { page?: number; offset?: number; limit?: number; includeChildren?: boolean }
   ): Promise<PaginatedResponse<Product>> {
     const searchParams = new URLSearchParams();
     
     // Backend uses offset/limit, not page
     const limit = params?.limit || 50;
-    const offset = params?.page ? (params.page - 1) * limit : 0;
+    // Direct offset takes precedence over page-based calculation
+    const offset = params?.offset !== undefined
+      ? params.offset
+      : params?.page ? (params.page - 1) * limit : 0;
     searchParams.set("limit", limit.toString());
     searchParams.set("offset", offset.toString());
     

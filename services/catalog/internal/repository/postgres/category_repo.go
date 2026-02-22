@@ -22,13 +22,28 @@ func NewCategoryRepository(db *DB) *CategoryRepository {
 
 func (r *CategoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Category, error) {
 	query := `
-		SELECT id, tenant_id, code, parent_id, name, description, image, sort_order, active,
-		       pim_code, last_synced_at, created_at, updated_at, deleted_at
-		FROM categories
-		WHERE id = $1 AND deleted_at IS NULL
+		WITH RECURSIVE descendants AS (
+			SELECT id AS cat_id FROM categories WHERE id = $1 AND deleted_at IS NULL
+			UNION ALL
+			SELECT c.id FROM categories c
+			INNER JOIN descendants d ON c.parent_id = d.cat_id
+			WHERE c.deleted_at IS NULL
+		)
+		SELECT c.id, c.tenant_id, c.code, c.parent_id, c.name, c.description, c.image,
+		       c.sort_order, c.active, c.pim_code, c.last_synced_at,
+		       c.created_at, c.updated_at, c.deleted_at,
+		       COALESCE((
+		           SELECT COUNT(DISTINCT p.id)::int
+		           FROM products p
+		           WHERE EXISTS (SELECT 1 FROM descendants d WHERE d.cat_id = ANY(p.category_ids))
+		             AND p.deleted_at IS NULL
+		       ), 0) AS product_count
+		FROM categories c
+		WHERE c.id = $1 AND c.deleted_at IS NULL
 	`
 
-	return r.scanCategory(r.db.Pool.QueryRow(ctx, query, id))
+	row := r.db.Pool.QueryRow(ctx, query, id)
+	return r.scanCategoryWithCount(row)
 }
 
 func (r *CategoryRepository) GetByIDWithAncestors(ctx context.Context, id uuid.UUID) (*domain.Category, error) {
@@ -366,6 +381,48 @@ func (r *CategoryRepository) HasProducts(ctx context.Context, id uuid.UUID) (boo
 	var hasProducts bool
 	err := r.db.Pool.QueryRow(ctx, query, id).Scan(&hasProducts)
 	return hasProducts, err
+}
+
+func (r *CategoryRepository) scanCategoryWithCount(row pgx.Row) (*domain.Category, error) {
+	var category domain.Category
+	var nameJSON, descriptionJSON []byte
+
+	err := row.Scan(
+		&category.ID,
+		&category.TenantID,
+		&category.Code,
+		&category.ParentID,
+		&nameJSON,
+		&descriptionJSON,
+		&category.Image,
+		&category.SortOrder,
+		&category.Active,
+		&category.PIMCode,
+		&category.LastSyncedAt,
+		&category.CreatedAt,
+		&category.UpdatedAt,
+		&category.DeletedAt,
+		&category.ProductCount,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrCategoryNotFound
+		}
+		return nil, err
+	}
+
+	_ = json.Unmarshal(nameJSON, &category.Name)
+	_ = json.Unmarshal(descriptionJSON, &category.Description)
+
+	if category.Name == nil {
+		category.Name = make(map[string]string)
+	}
+	if category.Description == nil {
+		category.Description = make(map[string]string)
+	}
+
+	return &category, nil
 }
 
 func (r *CategoryRepository) scanCategory(row pgx.Row) (*domain.Category, error) {
