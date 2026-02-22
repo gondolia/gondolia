@@ -29,35 +29,39 @@ export function VariantSelector({
 
   // BUG 1 FIX: Berechne verfügbare Optionen basierend auf existierenden Varianten
   // und bereits gewählten Achsenwerten
+  // Berechne verfügbare Optionen pro Achse.
+  // Wichtig: Beim Filtern für eine Achse wird deren eigene Auswahl NICHT berücksichtigt,
+  // damit man frei zwischen Optionen derselben Achse wechseln kann.
   const computedAvailableValues = useMemo(() => {
     if (!variants || variants.length === 0) {
-      // Fallback: alle Optionen verfügbar
       return undefined;
     }
 
     const available: Record<string, Set<string>> = {};
+    const axisCodes = axes.map(a => a.attributeCode);
 
-    // 1. Filtere Varianten basierend auf bereits gewählten Achsenwerten
-    // Leere Werte ignorieren (deselektierte Achsen)
-    const activeSelections = Object.entries(selectedValues).filter(([_, v]) => v !== "" && v != null);
-    const filteredVariants = variants.filter((variant) => {
-      return activeSelections.every(([axisCode, optionCode]) => {
-        return variant.axisValues[axisCode] === optionCode;
-      });
-    });
+    for (const targetAxis of axisCodes) {
+      available[targetAxis] = new Set();
 
-    // 2. Sammle alle verfügbaren Optionscodes aus den gefilterten Varianten
-    filteredVariants.forEach((variant) => {
-      Object.entries(variant.axisValues).forEach(([axisCode, optionCode]) => {
-        if (!available[axisCode]) {
-          available[axisCode] = new Set();
-        }
-        available[axisCode].add(optionCode);
+      // Filtere nur nach den Auswahlen der ANDEREN Achsen
+      const otherSelections = Object.entries(selectedValues).filter(
+        ([code, v]) => code !== targetAxis && v !== "" && v != null
+      );
+
+      const filteredVariants = variants.filter((variant) =>
+        otherSelections.every(([axisCode, optionCode]) =>
+          variant.axisValues[axisCode] === optionCode
+        )
+      );
+
+      filteredVariants.forEach((variant) => {
+        const val = variant.axisValues[targetAxis];
+        if (val) available[targetAxis].add(val);
       });
-    });
+    }
 
     return available;
-  }, [variants, selectedValues]);
+  }, [variants, selectedValues, axes]);
 
   const isOptionAvailable = (axisCode: string, optionCode: string): boolean => {
     // Verwende computed availability wenn variants vorhanden
@@ -93,7 +97,7 @@ export function VariantSelector({
 
   return (
     <div className={`space-y-5 ${className}`}>
-      {/* Progress indicator */}
+      {/* Progress indicator + Reset */}
       <div className="flex items-center gap-2 text-sm">
         <div className="flex items-center gap-1.5">
           {sortedAxes.map((axis, idx) => {
@@ -126,8 +130,19 @@ export function VariantSelector({
           })}
         </div>
         <span className="text-gray-600 dark:text-gray-400 ml-2">
-          {Object.keys(selectedValues).length} / {sortedAxes.length} ausgewählt
+          {Object.values(selectedValues).filter(v => v !== "" && v != null).length} / {sortedAxes.length} ausgewählt
         </span>
+        {Object.values(selectedValues).some(v => v !== "" && v != null) && (
+          <button
+            type="button"
+            onClick={() => {
+              sortedAxes.forEach(axis => onSelect(axis.attributeCode, ""));
+            }}
+            className="ml-auto text-xs text-primary-600 dark:text-primary-400 hover:underline font-medium"
+          >
+            Alle zurücksetzen
+          </button>
+        )}
       </div>
 
       {/* Axis selectors */}
@@ -169,20 +184,7 @@ export function VariantSelector({
                     {axisLabel}
                   </label>
                 </div>
-                {isCurrentAxisSelected && selectedValues[axis.attributeCode] && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // Create new object without this axis
-                      const newValues = { ...selectedValues };
-                      delete newValues[axis.attributeCode];
-                      onSelect(axis.attributeCode, "");
-                    }}
-                    className="text-xs text-primary-600 dark:text-primary-400 hover:underline font-medium"
-                  >
-                    Zurücksetzen
-                  </button>
-                )}
+                {/* Zurücksetzen entfernt — Benutzer kann direkt zwischen Optionen wechseln */}
               </div>
 
               {useDropdown ? (

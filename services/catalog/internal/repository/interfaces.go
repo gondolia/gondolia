@@ -92,3 +92,10 @@ type AttributeTranslationRepository interface {
 	Update(ctx context.Context, translation *domain.AttributeTranslation) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
+
+// BundleRepository defines the interface for bundle data access
+type BundleRepository interface {
+	GetComponents(ctx context.Context, bundleProductID uuid.UUID) ([]domain.BundleComponent, error)
+	SetComponents(ctx context.Context, bundleProductID uuid.UUID, components []domain.BundleComponent) error
+	GetComponentByID(ctx context.Context, componentID uuid.UUID) (*domain.BundleComponent, error)
+}

@@ -183,7 +183,7 @@ func (r *ProductRepository) ListVariants(ctx context.Context, parentID uuid.UUID
 	query := `
 		SELECT id, tenant_id, product_type, parent_id, sku, name, description, category_ids,
 		       attributes, status, images, pim_identifier, last_synced_at,
-		       created_at, updated_at, deleted_at
+		       created_at, updated_at, deleted_at, bundle_mode, bundle_price_mode
 		FROM products
 		WHERE parent_id = $1 AND deleted_at IS NULL
 	`
@@ -229,7 +229,8 @@ func (r *ProductRepository) FindVariantByAxisValues(ctx context.Context, parentI
 	query := `
 		SELECT DISTINCT p.id, p.tenant_id, p.product_type, p.parent_id, p.sku, p.name, 
 		       p.description, p.category_ids, p.attributes, p.status, p.images, 
-		       p.pim_identifier, p.last_synced_at, p.created_at, p.updated_at, p.deleted_at
+		       p.pim_identifier, p.last_synced_at, p.created_at, p.updated_at, p.deleted_at,
+		       p.bundle_mode, p.bundle_price_mode
 		FROM products p
 		WHERE p.parent_id = $1 
 		  AND p.product_type = 'variant'

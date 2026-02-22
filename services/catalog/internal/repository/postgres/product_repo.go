@@ -24,7 +24,7 @@ func (r *ProductRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	query := `
 		SELECT id, tenant_id, product_type, parent_id, sku, name, description, category_ids, 
 		       attributes, status, images, pim_identifier, last_synced_at, 
-		       created_at, updated_at, deleted_at
+		       created_at, updated_at, deleted_at, bundle_mode, bundle_price_mode
 		FROM products
 		WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -36,7 +36,7 @@ func (r *ProductRepository) GetBySKU(ctx context.Context, tenantID uuid.UUID, sk
 	query := `
 		SELECT id, tenant_id, product_type, parent_id, sku, name, description, category_ids, 
 		       attributes, status, images, pim_identifier, last_synced_at, 
-		       created_at, updated_at, deleted_at
+		       created_at, updated_at, deleted_at, bundle_mode, bundle_price_mode
 		FROM products
 		WHERE tenant_id = $1 AND sku = $2 AND deleted_at IS NULL
 	`
@@ -130,7 +130,7 @@ func (r *ProductRepository) List(ctx context.Context, filter domain.ProductFilte
 	query := fmt.Sprintf(`
 		SELECT id, tenant_id, product_type, parent_id, sku, name, description, category_ids, 
 		       attributes, status, images, pim_identifier, last_synced_at, 
-		       created_at, updated_at, deleted_at
+		       created_at, updated_at, deleted_at, bundle_mode, bundle_price_mode
 		FROM products
 		WHERE %s
 		ORDER BY sku
@@ -167,9 +167,10 @@ func (r *ProductRepository) Create(ctx context.Context, product *domain.Product)
 	query := `
 		INSERT INTO products (
 			id, tenant_id, product_type, parent_id, sku, name, description, category_ids, 
-			attributes, status, images, pim_identifier, last_synced_at, created_at, updated_at
+			attributes, status, images, pim_identifier, last_synced_at, created_at, updated_at,
+			bundle_mode, bundle_price_mode
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 		)
 	`
 
@@ -189,6 +190,8 @@ func (r *ProductRepository) Create(ctx context.Context, product *domain.Product)
 		product.LastSyncedAt,
 		product.CreatedAt,
 		product.UpdatedAt,
+		product.BundleMode,
+		product.BundlePriceMode,
 	)
 
 	if err != nil {
@@ -284,6 +287,8 @@ func (r *ProductRepository) scanProduct(row pgx.Row) (*domain.Product, error) {
 		&product.CreatedAt,
 		&product.UpdatedAt,
 		&product.DeletedAt,
+		&product.BundleMode,
+		&product.BundlePriceMode,
 	)
 
 	if err != nil {
@@ -340,6 +345,8 @@ func (r *ProductRepository) scanProductFromRows(rows pgx.Rows) (*domain.Product,
 		&product.CreatedAt,
 		&product.UpdatedAt,
 		&product.DeletedAt,
+		&product.BundleMode,
+		&product.BundlePriceMode,
 	)
 
 	if err != nil {

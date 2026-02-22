@@ -10,6 +10,10 @@ interface ParametricConfiguratorProps {
   pricing?: ParametricPricing;
   currency?: string;
   className?: string;
+  onSelectionsChange?: (selections: Record<string, string>) => void;
+  onParametersChange?: (parameters: Record<string, number>) => void;
+  /** When true, hides the standalone price display + add-to-cart (used inside bundles) */
+  embedded?: boolean;
 }
 
 export function ParametricConfigurator({
@@ -18,6 +22,9 @@ export function ParametricConfigurator({
   pricing,
   currency = "CHF",
   className = "",
+  onSelectionsChange,
+  onParametersChange,
+  embedded = false,
 }: ParametricConfiguratorProps) {
   const sortedAxes = useMemo(
     () => [...axes].sort((a, b) => a.position - b.position),
@@ -45,6 +52,13 @@ export function ParametricConfigurator({
     }
     return initial;
   });
+
+  // Notify parent of initial values
+  useEffect(() => {
+    onSelectionsChange?.(selections);
+    onParametersChange?.(parameters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only on mount
 
   const [quantity, setQuantity] = useState(1);
   const [priceResult, setPriceResult] = useState<ParametricPriceResponse | null>(null);
@@ -105,11 +119,19 @@ export function ParametricConfigurator({
   }, [calculatePrice]);
 
   const handleParameterChange = (code: string, value: number) => {
-    setParameters((prev) => ({ ...prev, [code]: value }));
+    setParameters((prev) => {
+      const next = { ...prev, [code]: value };
+      onParametersChange?.(next);
+      return next;
+    });
   };
 
   const handleSelectionChange = (code: string, value: string) => {
-    setSelections((prev) => ({ ...prev, [code]: value }));
+    setSelections((prev) => {
+      const next = { ...prev, [code]: value };
+      onSelectionsChange?.(next);
+      return next;
+    });
   };
 
   const formatPrice = (price: number) =>
@@ -228,7 +250,8 @@ export function ParametricConfigurator({
         </div>
       )}
 
-      {/* Quantity */}
+      {/* Quantity (hidden in embedded/bundle mode) */}
+      {!embedded && (
       <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Menge
@@ -241,8 +264,10 @@ export function ParametricConfigurator({
           className="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary-500"
         />
       </div>
+      )}
 
-      {/* Price result */}
+      {/* Price result (hidden in embedded/bundle mode) */}
+      {!embedded && (
       <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
         {isCalculating && (
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
@@ -334,8 +359,10 @@ export function ParametricConfigurator({
           </div>
         )}
       </div>
+      )}
 
-      {/* Add to Cart */}
+      {/* Add to Cart (hidden in embedded/bundle mode) */}
+      {!embedded && (
       <button
         disabled={!priceResult || isCalculating}
         className={`
@@ -350,6 +377,7 @@ export function ParametricConfigurator({
           ? `In den Warenkorb – ${formatPrice(priceResult.totalPrice)}${priceResult.sku ? ` (${priceResult.sku})` : ""}`
           : "Bitte konfigurieren"}
       </button>
+      )}
     </div>
   );
 }

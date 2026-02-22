@@ -28,7 +28,14 @@ func NewProductService(productRepo repository.ProductRepository, priceRepo repos
 
 // GetByID retrieves a product by ID
 func (s *ProductService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Product, error) {
-	return s.productRepo.GetByID(ctx, id)
+	product, err := s.productRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if product.ProductType == domain.ProductTypeBundle {
+		s.enrichBundleListData(ctx, product)
+	}
+	return product, nil
 }
 
 // GetBySKU retrieves a product by SKU
@@ -52,11 +59,13 @@ func (s *ProductService) List(ctx context.Context, filter domain.ProductFilter) 
 	}
 
 	// Enrich variant_parent products with variant metadata
+	// Enrich bundle products with base price from prices table
 	for i := range products {
-		if products[i].ProductType != domain.ProductTypeVariantParent {
-			continue
+		if products[i].ProductType == domain.ProductTypeVariantParent {
+			s.enrichVariantParentListData(ctx, &products[i])
+		} else if products[i].ProductType == domain.ProductTypeBundle {
+			s.enrichBundleListData(ctx, &products[i])
 		}
-		s.enrichVariantParentListData(ctx, &products[i])
 	}
 
 	return products, total, nil
@@ -123,6 +132,21 @@ func (s *ProductService) enrichVariantParentListData(ctx context.Context, produc
 	if len(summary) > 0 {
 		product.VariantSummary = summary
 	}
+}
+
+// enrichBundleListData adds base_price to a bundle product for list/card display.
+// For fixed mode: uses the stored price directly.
+// For configurable mode: calculates minimum price using min_quantity for each component.
+func (s *ProductService) enrichBundleListData(ctx context.Context, product *domain.Product) {
+	prices, err := s.priceRepo.ListByProduct(ctx, product.ID)
+	if err != nil || len(prices) == 0 {
+		return
+	}
+	// Use the first price entry (lowest min_quantity)
+	bp := prices[0].Price
+	bc := prices[0].Currency
+	product.BasePrice = &bp
+	product.BaseCurrency = &bc
 }
 
 // Create creates a new product

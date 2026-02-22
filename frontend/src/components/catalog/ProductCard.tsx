@@ -30,7 +30,7 @@ export function ProductCard({ product }: ProductCardProps) {
   return (
     <Link href={`/products/${product.id}`}>
       <Panel className="h-full hover:shadow-lg transition-shadow cursor-pointer">
-        <div className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-t-lg overflow-hidden">
+        <div className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-t-lg overflow-hidden relative">
           {product.imageUrl ? (
             <img
               src={product.imageUrl}
@@ -54,6 +54,14 @@ export function ProductCard({ product }: ProductCardProps) {
               </svg>
             </div>
           )}
+          {/* Bundle Icon Overlay */}
+          {product.productType === 'bundle' && (
+            <div className="absolute top-2 right-2 bg-purple-600 text-white p-2 rounded-full shadow-lg">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+          )}
         </div>
         <div className="p-4 space-y-2">
           <div className="flex items-center justify-between">
@@ -63,6 +71,16 @@ export function ProductCard({ product }: ProductCardProps) {
             {product.productType === 'variant_parent' && product.variantCount && (
               <div className="text-xs text-primary-600 dark:text-primary-400 font-medium">
                 {product.variantCount} Varianten
+              </div>
+            )}
+            {product.productType === 'bundle' && (
+              <div className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded font-medium">
+                Bundle
+              </div>
+            )}
+            {product.productType === 'parametric' && (
+              <div className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-medium">
+                Parametrisch
               </div>
             )}
           </div>
@@ -89,7 +107,30 @@ export function ProductCard({ product }: ProductCardProps) {
           )}
           <div className="flex items-end justify-between pt-2">
             <div>
-              {product.productType === 'variant_parent' && product.priceRange ? (
+              {product.productType === 'bundle' ? (
+                // Bundle: show price or "ab" price depending on mode
+                <div>
+                  {product.basePrice > 0 ? (
+                    <>
+                      <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                        {product.bundleMode === 'configurable' ? 'ab ' : ''}{formatPrice(product.basePrice, product.currency)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {product.bundleMode === 'configurable' ? 'Mengen anpassbar' : 'Komplettpaket'}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                        Bundle
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Preis je nach Konfiguration
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : product.productType === 'variant_parent' && product.priceRange ? (
                 // Show price range for variant_parent
                 <div>
                   <div className="text-lg font-bold text-primary-600 dark:text-primary-400">

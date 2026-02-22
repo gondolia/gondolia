@@ -8,7 +8,7 @@ function ensureLeadingSlash(url: string | undefined): string | undefined {
 }
 
 // Product Types
-export type ProductType = 'simple' | 'variant_parent' | 'variant' | 'parametric';
+export type ProductType = 'simple' | 'variant_parent' | 'variant' | 'parametric' | 'bundle';
 
 // Variant Axis Definition
 export interface VariantAxis {
@@ -43,6 +43,45 @@ export interface ParametricPriceResponse {
   currency: string;
   quantity: number;
   breakdown?: Record<string, number>;
+}
+
+// Bundle types
+export interface BundleComponent {
+  id: string;
+  tenantId: string;
+  bundleProductId: string;
+  componentProductId: string;
+  product?: Product;
+  quantity: number;
+  minQuantity?: number;
+  maxQuantity?: number;
+  sortOrder: number;
+  defaultParameters?: Record<string, number> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BundlePriceRequest {
+  components: Array<{
+    component_id: string; // ID of bundle_component record, NOT product ID
+    quantity: number;
+    parameters?: Record<string, number>;
+    selections?: Record<string, string>;
+  }>;
+}
+
+export interface BundlePriceResponse {
+  priceMode: string; // 'computed' | 'fixed'
+  components: Array<{
+    componentId: string; // bundle_component ID
+    productId: string; // product ID
+    sku: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }>;
+  total: number;
+  currency: string;
 }
 
 // Axis Option (einzelner Wert einer Achse)
@@ -128,6 +167,10 @@ export interface Product {
   
   // Parametric-specific (nur bei parametric)
   parametricPricing?: ParametricPricing;
+
+  // Bundle-specific (nur bei bundle)
+  bundleMode?: 'fixed' | 'configurable';
+  bundlePriceMode?: 'computed' | 'fixed';
 }
 
 export interface Category {
@@ -249,6 +292,10 @@ export interface ApiProduct {
   variant_summary?: Record<string, string[]>;
   parent_summary?: { id: string; sku: string; name: Record<string, string> };
   axis_values?: ApiAxisValueEntry[];
+
+  // Bundle-specific
+  bundle_mode?: 'fixed' | 'configurable';
+  bundle_price_mode?: 'computed' | 'fixed';
 }
 
 export interface ApiCategory {
@@ -455,6 +502,10 @@ export function mapApiProduct(api: ApiProduct): Product {
     variantSummary: api.variant_summary,
     parentSummary: api.parent_summary,
     axisValues,
+
+    // Bundle-specific fields
+    bundleMode: api.bundle_mode,
+    bundlePriceMode: api.bundle_price_mode,
   };
 }
 

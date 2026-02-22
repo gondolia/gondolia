@@ -580,7 +580,7 @@ class ApiClient {
       selected: Record<string, string>;
       available: Record<string, import("@/types/catalog").ApiAxisOption[]>;
     }>(`/api/v1/products/${productId}/variants/available?${params.toString()}`);
-    
+
     // Map available options
     const available: Record<string, import("@/types/catalog").AxisOption[]> = {};
     for (const [axisCode, options] of Object.entries(response.available)) {
@@ -591,10 +591,86 @@ class ApiClient {
         available: opt.available,
       }));
     }
-    
+
     return {
       selected: response.selected,
       available,
+    };
+  }
+
+  // ==================== BUNDLE API ====================
+
+  // Get bundle components
+  async getBundleComponents(productId: string): Promise<import("@/types/catalog").BundleComponent[]> {
+    const response = await this.request<{
+      components: Array<{
+        id: string;
+        tenant_id: string;
+        bundle_product_id: string;
+        component_product_id: string;
+        product?: import("@/types/catalog").ApiProduct;
+        quantity: number;
+        min_quantity?: number;
+        max_quantity?: number;
+        sort_order: number;
+        default_parameters?: Record<string, number> | null;
+        created_at: string;
+        updated_at: string;
+      }>
+    }>(`/api/v1/products/${productId}/bundle-components`);
+
+    const { mapApiProduct } = await import("@/types/catalog");
+
+    return response.components.map(c => ({
+      id: c.id,
+      tenantId: c.tenant_id,
+      bundleProductId: c.bundle_product_id,
+      componentProductId: c.component_product_id,
+      product: c.product ? mapApiProduct(c.product) : undefined,
+      quantity: c.quantity,
+      minQuantity: c.min_quantity,
+      maxQuantity: c.max_quantity,
+      sortOrder: c.sort_order,
+      defaultParameters: c.default_parameters,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+    }));
+  }
+
+  // Calculate bundle price
+  async calculateBundlePrice(
+    productId: string,
+    request: import("@/types/catalog").BundlePriceRequest
+  ): Promise<import("@/types/catalog").BundlePriceResponse> {
+    const response = await this.request<{
+      price_mode: string;
+      components: Array<{
+        component_id: string;
+        product_id: string;
+        sku: string;
+        quantity: number;
+        unit_price: number;
+        line_total: number;
+      }>;
+      total: number;
+      currency: string;
+    }>(`/api/v1/bundles/${productId}/calculate-price`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+
+    return {
+      priceMode: response.price_mode,
+      components: (response.components || []).map(c => ({
+        componentId: c.component_id,
+        productId: c.product_id,
+        sku: c.sku,
+        quantity: c.quantity,
+        unitPrice: c.unit_price,
+        lineTotal: c.line_total,
+      })),
+      total: response.total,
+      currency: response.currency,
     };
   }
 }

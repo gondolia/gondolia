@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { VariantSelector } from "@/components/catalog/VariantSelector";
 import { VariantMatrixView } from "@/components/catalog/VariantMatrixView";
 import { ParametricConfigurator } from "@/components/catalog/ParametricConfigurator";
+import { BundleConfigurator } from "@/components/catalog/BundleConfigurator";
+import type { BundleComponent } from "@/types/catalog";
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -32,6 +34,10 @@ export default function ProductDetailPage() {
   const [selectedVariant, setSelectedVariant] = useState<Product | null>(null);
   const [isLoadingVariant, setIsLoadingVariant] = useState(false);
   const [viewMode, setViewMode] = useState<'selector' | 'matrix'>('selector');
+
+  // Bundle state
+  const [bundleComponents, setBundleComponents] = useState<BundleComponent[]>([]);
+  const [isLoadingBundle, setIsLoadingBundle] = useState(false);
 
   useEffect(() => {
     loadProductDetails();
@@ -91,7 +97,7 @@ export default function ProductDetailPage() {
       setProduct(productData);
 
       // Load prices (only for simple or variant products, not variant_parent)
-      if (productData.productType !== 'variant_parent' && productData.productType !== 'parametric') {
+      if (productData.productType !== 'variant_parent' && productData.productType !== 'parametric' && productData.productType !== 'bundle') {
         const pricesData = await apiClient.getProductPrices(productId);
         setPriceScales(pricesData);
       }
@@ -111,7 +117,7 @@ export default function ProductDetailPage() {
       if (productData.productType === 'variant_parent') {
         const initialSelection: Record<string, string> = {};
         const variantSku = searchParams.get('variant');
-        
+
         if (variantSku && productData.variants) {
           // Find variant by SKU and pre-select its axis values
           const variant = productData.variants.find(v => v.sku === variantSku);
@@ -119,8 +125,21 @@ export default function ProductDetailPage() {
             Object.assign(initialSelection, variant.axisValues);
           }
         }
-        
+
         setSelectedAxisValues(initialSelection);
+      }
+
+      // Load bundle components if bundle product
+      if (productData.productType === 'bundle') {
+        setIsLoadingBundle(true);
+        try {
+          const componentsData = await apiClient.getBundleComponents(productId);
+          setBundleComponents(componentsData);
+        } catch (err) {
+          console.error("Failed to load bundle components:", err);
+        } finally {
+          setIsLoadingBundle(false);
+        }
       }
     } catch (err) {
       const error = err as { message?: string };
@@ -472,9 +491,65 @@ export default function ProductDetailPage() {
             </Panel>
           )}
 
-          {/* Price & Stock — hidden when matrix mode is active or parametric (has its own price display) */}
+          {/* Bundle Configurator (only for bundle products) */}
+          {product.productType === 'bundle' && (
+            <Panel>
+              <PanelHeader>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Bundle konfigurieren
+                </h2>
+              </PanelHeader>
+              <PanelBody>
+                {isLoadingBundle ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <svg
+                        className="mx-auto h-8 w-8 animate-spin text-primary-600"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
+                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        Bundle-Komponenten werden geladen...
+                      </p>
+                    </div>
+                  </div>
+                ) : bundleComponents.length > 0 ? (
+                  <BundleConfigurator
+                    productId={product.id}
+                    components={bundleComponents}
+                    bundleMode={product.bundleMode || 'fixed'}
+                    bundlePriceMode={product.bundlePriceMode || 'computed'}
+                    currency={product.currency}
+                  />
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    Keine Bundle-Komponenten gefunden
+                  </div>
+                )}
+              </PanelBody>
+            </Panel>
+          )}
+
+          {/* Price & Stock — hidden when matrix mode is active, parametric, or bundle (have their own price display) */}
           <Panel className={
-            (viewMode === 'matrix' && product.productType === 'variant_parent') || product.productType === 'parametric'
+            (viewMode === 'matrix' && product.productType === 'variant_parent') ||
+            product.productType === 'parametric' ||
+            product.productType === 'bundle'
               ? 'hidden' : ''
           }>
             <PanelBody>

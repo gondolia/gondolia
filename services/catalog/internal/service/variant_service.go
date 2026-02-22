@@ -159,6 +159,17 @@ func (s *VariantService) GetProductWithVariants(ctx context.Context, id uuid.UUI
 		return nil, err
 	}
 
+	// Enrich bundle products with base price
+	if product.ProductType == domain.ProductTypeBundle && s.priceRepo != nil {
+		prices, err := s.priceRepo.ListByProduct(ctx, product.ID)
+		if err == nil && len(prices) > 0 {
+			bp := prices[0].Price
+			bc := prices[0].Currency
+			product.BasePrice = &bp
+			product.BaseCurrency = &bc
+		}
+	}
+
 	// Enrich each variant with price and availability data
 	if product.ProductType == domain.ProductTypeVariantParent && s.priceRepo != nil {
 		for i := range product.Variants {

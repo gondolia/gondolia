@@ -63,6 +63,9 @@ func main() {
 	axisOptionRepo := postgres.NewAxisOptionRepository(db)
 	skuMappingRepo := postgres.NewSKUMappingRepository(db)
 
+	// Initialize bundle repository
+	bundleRepo := postgres.NewBundleRepository(db)
+
 	// Initialize services
 	productService := service.NewProductService(productRepo, priceRepo, attrTransRepo)
 	variantService := service.NewVariantService(productRepo, priceRepo)
@@ -70,6 +73,7 @@ func main() {
 	priceService := service.NewPriceService(priceRepo, productRepo)
 	attrTransService := service.NewAttributeTranslationService(attrTransRepo)
 	parametricService := service.NewParametricService(productRepo, parametricPricingRepo, axisOptionRepo, skuMappingRepo)
+	bundleService := service.NewBundleService(bundleRepo, productRepo, priceRepo, parametricService)
 	
 	var syncService *service.SyncService
 	var searchService *service.SearchService
@@ -86,6 +90,7 @@ func main() {
 	categoryHandler := handler.NewCategoryHandler(categoryService, productService)
 	priceHandler := handler.NewPriceHandler(priceService)
 	parametricHandler := handler.NewParametricHandler(parametricService)
+	bundleHandler := handler.NewBundleHandler(bundleService)
 	attrTransHandler := handler.NewAttributeTranslationHandler(attrTransService)
 	
 	var searchHandler *handler.SearchHandler
@@ -135,6 +140,16 @@ func main() {
 		
 		// Parametric endpoints
 		products.POST("/:id/calculate-price", parametricHandler.CalculatePrice)
+
+		// Bundle endpoints
+		products.GET("/:id/bundle-components", bundleHandler.GetComponents)
+		products.PUT("/:id/bundle-components", bundleHandler.SetComponents)
+	}
+
+	// Bundle endpoints (storefront)
+	bundles := api.Group("/bundles")
+	{
+		bundles.POST("/:id/calculate-price", bundleHandler.CalculatePrice)
 	}
 
 	// Category endpoints

@@ -23,6 +23,7 @@ const (
 	ProductTypeVariantParent ProductType = "variant_parent"
 	ProductTypeVariant       ProductType = "variant"
 	ProductTypeParametric    ProductType = "parametric"
+	ProductTypeBundle        ProductType = "bundle"
 )
 
 // AttributeType represents the data type of a product attribute
@@ -64,6 +65,9 @@ type Product struct {
 	// Populated in list responses for variant_parent products
 	VariantCount      *int               `json:"variant_count,omitempty"`      // Number of active variants
 	VariantPriceRange *PriceRange        `json:"price_range,omitempty"`        // Min/max price across variants
+	BasePrice         *float64           `json:"base_price,omitempty"`         // Base/starting price for display
+	BaseCurrency      *string            `json:"base_currency,omitempty"`      // Currency for base price
+	ParametricPricing *ParametricPricing `json:"parametric_pricing,omitempty"` // Only for parametric products
 	VariantSummary    map[string][]string `json:"variant_summary,omitempty"`   // axis_code -> list of labels
 
 	// Populated when loading a variant directly (design decision 11.3)
@@ -71,6 +75,11 @@ type Product struct {
 
 	// Populated by SelectVariant — inline price for the selected variant
 	Price *VariantPrice `json:"price,omitempty"`
+
+	// Bundle-specific fields (populated based on product_type)
+	BundleMode      *string            `json:"bundle_mode,omitempty"`       // Only for bundle: 'fixed' | 'configurable'
+	BundlePriceMode *string            `json:"bundle_price_mode,omitempty"` // Only for bundle: 'computed' | 'fixed'
+	Components      []BundleComponent  `json:"components,omitempty"`        // Only for bundle
 }
 
 // ParentSummary provides parent context when a variant is loaded directly
