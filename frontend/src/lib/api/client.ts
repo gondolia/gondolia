@@ -274,6 +274,7 @@ class ApiClient {
     if (params?.q) searchParams.set("q", params.q);
     if (params?.categoryId) searchParams.set("category_id", params.categoryId);
     if (params?.manufacturerId) searchParams.set("manufacturer_id", params.manufacturerId);
+    if (params?.productType) searchParams.set("product_type", params.productType);
     if (params?.minPrice) searchParams.set("min_price", params.minPrice.toString());
     if (params?.maxPrice) searchParams.set("max_price", params.maxPrice.toString());
     

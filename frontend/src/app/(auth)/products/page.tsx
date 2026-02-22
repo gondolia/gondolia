@@ -24,6 +24,7 @@ export default function ProductsPage() {
 
   const currentPage = parseInt(searchParams.get("page") || "1");
   const categoryId = searchParams.get("category") || undefined;
+  const productTypeFilter = searchParams.get("type") || undefined;
 
   useEffect(() => {
     loadCategories();
@@ -71,6 +72,7 @@ export default function ProductsPage() {
         // No category filter — use general product search
         const data = await apiClient.getProducts({
           q,
+          productType: productTypeFilter,
           page: currentPage,
           limit: 12,
         });
@@ -104,6 +106,25 @@ export default function ProductsPage() {
     window.location.href = `/products?${params.toString()}`;
   };
 
+  const handleTypeFilter = (type: string | undefined) => {
+    const params = new URLSearchParams(searchParams);
+    if (type) {
+      params.set("type", type);
+    } else {
+      params.delete("type");
+    }
+    params.delete("page");
+    window.location.href = `/products?${params.toString()}`;
+  };
+
+  const typeFilters = [
+    { label: "Alle", value: undefined },
+    { label: "Einfach", value: "simple" },
+    { label: "Varianten", value: "variant_parent" },
+    { label: "Parametrisch", value: "parametric" },
+    { label: "Bundles", value: "bundle" },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -130,6 +151,25 @@ export default function ProductsPage() {
           </button>
         </form>
       </Panel>
+
+      {/* Product Type Filter */}
+      <div className="flex flex-wrap gap-2">
+        {typeFilters.map((f) => (
+          <button
+            key={f.value ?? "all"}
+            onClick={() => handleTypeFilter(f.value)}
+            className={`
+              px-4 py-2 text-sm rounded-full font-medium transition-colors
+              ${productTypeFilter === f.value || (!productTypeFilter && !f.value)
+                ? "bg-primary-600 text-white shadow-sm"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }
+            `}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar */}
