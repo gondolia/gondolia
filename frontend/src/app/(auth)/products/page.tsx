@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiClient } from "@/lib/api/client";
 import type { Product, Category } from "@/types/catalog";
@@ -34,6 +34,7 @@ export default function ProductsPage() {
 
   // Use a ref to cancel stale async results when filters change mid-flight
   const loadContextRef = useRef(0);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadCategories();
@@ -118,14 +119,18 @@ export default function ProductsPage() {
     };
   };
 
-  const handleLoadMore = async () => {
+  // More items exist as long as we haven't fetched everything from the backend
+  const hasMore = nextOffset < totalProducts;
+
+  const handleLoadMore = useCallback(async () => {
+    if (isLoadingMore) return;
     setIsLoadingMore(true);
     try {
       const { filtered, rawFetched } = await doFetch(
         nextOffset,
         categoryId,
         productTypeFilter,
-        q
+        searchParams.get("q") || undefined
       );
       setAllProducts((prev) => [...prev, ...filtered]);
       setNextOffset(rawFetched);
@@ -134,7 +139,25 @@ export default function ProductsPage() {
     } finally {
       setIsLoadingMore(false);
     }
-  };
+  }, [nextOffset, categoryId, productTypeFilter, searchParams, isLoadingMore]);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isLoadingMore && hasMore) {
+          handleLoadMore();
+        }
+      },
+      { rootMargin: "200px" } // trigger 200px before sentinel is visible
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleLoadMore, isLoadingMore, hasMore]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,9 +181,6 @@ export default function ProductsPage() {
     params.delete("page");
     window.location.href = `/products?${params.toString()}`;
   };
-
-  // More items exist as long as we haven't fetched everything from the backend
-  const hasMore = nextOffset < totalProducts;
 
   const typeFilters = [
     { label: "Alle", value: undefined },
@@ -284,42 +304,34 @@ export default function ProductsPage() {
                 ))}
               </div>
 
-              {/* "Mehr laden" button — only shown while there are more products */}
+              {/* Infinite scroll sentinel */}
               {hasMore && (
-                <div className="flex justify-center pt-2 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={isLoadingMore}
-                    className="mt-4 px-8 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
-                  >
-                    {isLoadingMore ? (
-                      <>
-                        <svg
-                          className="w-4 h-4 animate-spin"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
-                        Wird geladen…
-                      </>
-                    ) : (
-                      `Mehr Produkte laden (${allProducts.length} von ${totalProducts})`
-                    )}
-                  </button>
+                <div ref={sentinelRef} className="flex justify-center py-8">
+                  {isLoadingMore && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                      <svg
+                        className="w-5 h-5 animate-spin"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Produkte werden geladen…
+                    </div>
+                  )}
                 </div>
               )}
             </div>
