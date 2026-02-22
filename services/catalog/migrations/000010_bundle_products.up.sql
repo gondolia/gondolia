@@ -79,7 +79,7 @@ CREATE TRIGGER trg_check_bundle_component_type
 -- Example: Tool Kit Bundle (fixed mode, computed price)
 INSERT INTO products (
   id, tenant_id, product_type, sku, name, description,
-  category_ids, status, bundle_mode, bundle_price_mode, created_at, updated_at
+  category_ids, status, images, bundle_mode, bundle_price_mode, created_at, updated_at
 ) VALUES (
   'b0000000-1000-0000-0000-000000000001',
   '00000000-0000-0000-0000-000000000001',
@@ -89,6 +89,7 @@ INSERT INTO products (
   '{"de": "Komplett-Set für Einsteiger mit allen wichtigen Werkzeugen", "en": "Complete starter set with all essential tools"}',
   ARRAY[]::UUID[],
   'active',
+  '[{"url": "/images/products/bundle-toolset.svg", "alt_text": "Werkzeugset Basic Bundle", "sort_order": 0, "is_primary": true}]',
   'fixed',
   'computed',
   now(),
@@ -98,7 +99,7 @@ INSERT INTO products (
 -- Example: Custom Furniture Bundle (configurable mode, fixed price)
 INSERT INTO products (
   id, tenant_id, product_type, sku, name, description,
-  category_ids, status, bundle_mode, bundle_price_mode, created_at, updated_at
+  category_ids, status, images, bundle_mode, bundle_price_mode, created_at, updated_at
 ) VALUES (
   'b0000000-1000-0000-0000-000000000002',
   '00000000-0000-0000-0000-000000000001',
@@ -108,6 +109,7 @@ INSERT INTO products (
   '{"de": "Stellen Sie Ihr individuelles Möbelpaket zusammen", "en": "Assemble your custom furniture package"}',
   ARRAY[]::UUID[],
   'active',
+  '[{"url": "/images/products/bundle-furniture.svg", "alt_text": "Möbel-Paket Individuell", "sort_order": 0, "is_primary": true}]',
   'configurable',
   'fixed',
   now(),

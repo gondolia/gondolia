@@ -52,6 +52,11 @@ func (h *ProductHandler) List(c *gin.Context) {
 		filter.Search = &search
 	}
 
+	if c.Query("product_type") != "" {
+		pt := domain.ProductType(c.Query("product_type"))
+		filter.ProductType = &pt
+	}
+
 	// Pagination
 	if limit := parseInt(c.Query("limit"), 50); limit > 0 {
 		filter.Limit = limit
