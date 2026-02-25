@@ -107,6 +107,72 @@ services:
       - "traefik.http.services.catalog.loadbalancer.server.port=8081"
       - "traefik.http.routers.catalog.priority=20"
 
+  cart:
+    build:
+      context: .
+      dockerfile: services/cart/Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: cart-service
+      HTTP_PORT: "8082"
+      GRPC_PORT: "9092"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: cart
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      ALLOWED_ORIGINS: "*"
+      CATALOG_SERVICE_URL: http://catalog:8081
+      JWT_ACCESS_SECRET: dev-access-secret-change-me
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cart.rule=PathPrefix(`/api/v1/cart`)"
+      - "traefik.http.routers.cart.entrypoints=web"
+      - "traefik.http.services.cart.loadbalancer.server.port=8082"
+      - "traefik.http.routers.cart.priority=20"
+
+  order:
+    build:
+      context: .
+      dockerfile: services/order/Dockerfile
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: order-service
+      HTTP_PORT: "8083"
+      GRPC_PORT: "9093"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: order
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      ALLOWED_ORIGINS: "*"
+      CART_SERVICE_URL: http://cart:8082
+      JWT_ACCESS_SECRET: dev-access-secret-change-me
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      cart:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.order.rule=PathPrefix(`/api/v1/orders`)"
+      - "traefik.http.routers.order.entrypoints=web"
+      - "traefik.http.services.order.loadbalancer.server.port=8083"
+      - "traefik.http.routers.order.priority=20"
+
   frontend:
     image: node:20-alpine
     working_dir: /app
