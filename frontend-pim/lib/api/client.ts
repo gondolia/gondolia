@@ -231,6 +231,7 @@ class PimApiClient {
   }
 
   async getCategory(id: string): Promise<Category> {
+    // API returns category directly, not wrapped
     const response = await this.request<ApiCategory>(
       `${this.catalogUrl}/api/v1/categories/${id}`
     );
@@ -301,11 +302,12 @@ class PimApiClient {
       manufacturer: data.manufacturer,
       manufacturer_part_number: data.manufacturerPartNumber,
       attributes: data.attributes,
-      parent_product_id: data.parentProductId,
+      parent_id: data.parentProductId, // API uses parent_id
       variant_axes: data.variantAxes,
     };
 
-    const response = await this.request<{ data: ApiProduct }>(
+    // API returns product directly, not wrapped in {data: ...}
+    const response = await this.request<ApiProduct>(
       `${this.catalogUrl}/api/v1/products`,
       {
         method: "POST",
@@ -314,7 +316,7 @@ class PimApiClient {
     );
 
     const { mapApiProduct } = await import("@/types/catalog");
-    return mapApiProduct(response.data);
+    return mapApiProduct(response);
   }
 
   async updateProduct(id: string, data: Partial<Product>): Promise<Product> {
@@ -326,7 +328,8 @@ class PimApiClient {
     if (data.manufacturerPartNumber !== undefined) payload.manufacturer_part_number = data.manufacturerPartNumber;
     if (data.attributes) payload.attributes = data.attributes;
 
-    const response = await this.request<{ data: ApiProduct }>(
+    // API returns product directly, not wrapped
+    const response = await this.request<ApiProduct>(
       `${this.catalogUrl}/api/v1/products/${id}`,
       {
         method: "PUT",
@@ -335,7 +338,7 @@ class PimApiClient {
     );
 
     const { mapApiProduct } = await import("@/types/catalog");
-    return mapApiProduct(response.data);
+    return mapApiProduct(response);
   }
 
   async updateProductStatus(id: string, status: ProductStatus): Promise<void> {
@@ -364,7 +367,8 @@ class PimApiClient {
       currency: data.currency,
     };
 
-    const response = await this.request<{ data: ApiPriceScale }>(
+    // API returns price directly, not wrapped
+    const response = await this.request<ApiPriceScale>(
       `${this.catalogUrl}/api/v1/products/${productId}/prices`,
       {
         method: "POST",
@@ -373,7 +377,7 @@ class PimApiClient {
     );
 
     const { mapApiPriceScale } = await import("@/types/catalog");
-    return mapApiPriceScale(response.data);
+    return mapApiPriceScale(response);
   }
 
   async updatePrice(productId: string, priceId: string, data: Partial<PriceScale>): Promise<PriceScale> {
@@ -382,7 +386,8 @@ class PimApiClient {
     if (data.price !== undefined) payload.price = data.price;
     if (data.currency !== undefined) payload.currency = data.currency;
 
-    const response = await this.request<{ data: ApiPriceScale }>(
+    // API returns price directly, not wrapped
+    const response = await this.request<ApiPriceScale>(
       `${this.catalogUrl}/api/v1/products/${productId}/prices/${priceId}`,
       {
         method: "PUT",
@@ -391,7 +396,7 @@ class PimApiClient {
     );
 
     const { mapApiPriceScale } = await import("@/types/catalog");
-    return mapApiPriceScale(response.data);
+    return mapApiPriceScale(response);
   }
 
   async deletePrice(productId: string, priceId: string): Promise<void> {
@@ -498,7 +503,8 @@ class PimApiClient {
       is_active: data.isActive,
     };
 
-    const response = await this.request<{ data: ApiCategory }>(
+    // API returns category directly, not wrapped
+    const response = await this.request<ApiCategory>(
       `${this.catalogUrl}/api/v1/categories`,
       {
         method: "POST",
@@ -507,7 +513,7 @@ class PimApiClient {
     );
 
     const { mapApiCategory } = await import("@/types/catalog");
-    return mapApiCategory(response.data);
+    return mapApiCategory(response);
   }
 
   async updateCategory(id: string, data: Partial<Category>): Promise<Category> {
@@ -517,7 +523,8 @@ class PimApiClient {
     if (data.sortOrder !== undefined) payload.sort_order = data.sortOrder;
     if (data.isActive !== undefined) payload.is_active = data.isActive;
 
-    const response = await this.request<{ data: ApiCategory }>(
+    // API returns category directly, not wrapped
+    const response = await this.request<ApiCategory>(
       `${this.catalogUrl}/api/v1/categories/${id}`,
       {
         method: "PUT",
@@ -526,7 +533,7 @@ class PimApiClient {
     );
 
     const { mapApiCategory } = await import("@/types/catalog");
-    return mapApiCategory(response.data);
+    return mapApiCategory(response);
   }
 
   async deleteCategory(id: string): Promise<void> {

@@ -2,6 +2,16 @@
 export type ProductType = 'simple' | 'variant_parent' | 'variant' | 'bundle' | 'parametric';
 export type ProductStatus = 'active' | 'inactive' | 'draft';
 
+// Axis value for variants (frontend format)
+export interface AxisValue {
+  variantId: string;
+  axisId: string;
+  axisAttributeCode: string;
+  optionCode: string;
+  axisLabel: Record<string, string>;
+  optionLabel: Record<string, string>;
+}
+
 export interface Product {
   id: string;
   tenantId: string;
@@ -19,6 +29,7 @@ export interface Product {
   // Variant-specific fields
   parentProductId?: string;
   variantAxes?: Record<string, string>; // e.g., {"color": "red", "size": "L"}
+  axisValues?: AxisValue[]; // Detailed axis values for variants
   // Pricing
   basePrice?: number;
   currency?: string;
@@ -70,6 +81,23 @@ export interface BundleComponent {
   updatedAt: string;
 }
 
+// Attribute from API (array format)
+export interface ApiAttribute {
+  key: string;
+  type: string;
+  value: any;
+}
+
+// Axis value from API for variants
+export interface ApiAxisValue {
+  variant_id: string;
+  axis_id: string;
+  axis_attribute_code: string;
+  option_code: string;
+  axis_label: Record<string, string>;
+  option_label: Record<string, string>;
+}
+
 // API response types (snake_case)
 export interface ApiProduct {
   id: string;
@@ -86,11 +114,12 @@ export interface ApiProduct {
     is_primary: boolean;
     sort_order: number;
   }>;
-  attributes?: Record<string, any>;
+  attributes?: ApiAttribute[]; // Array format from API
   created_at: string;
   updated_at: string;
-  parent_product_id?: string;
+  parent_id?: string; // Note: API uses parent_id not parent_product_id
   variant_axes?: Record<string, string>;
+  axis_values?: ApiAxisValue[]; // For variant products
   category_ids?: string[];
 }
 
@@ -102,7 +131,7 @@ export interface ApiCategory {
   description?: Record<string, string>;
   parent_id?: string;
   sort_order: number;
-  is_active: boolean;
+  active: boolean; // Note: API uses 'active' not 'is_active'
   product_count?: number;
 }
 
@@ -137,6 +166,37 @@ export interface ProductSearchParams {
 
 // Mappers
 export function mapApiProduct(api: ApiProduct): Product {
+  // Convert attributes from array to Record format
+  const attributesRecord: Record<string, any> = {};
+  if (Array.isArray(api.attributes)) {
+    for (const attr of api.attributes) {
+      attributesRecord[attr.key] = attr.value;
+    }
+  } else if (api.attributes) {
+    // Fallback if already Record format
+    Object.assign(attributesRecord, api.attributes);
+  }
+
+  // Map axis_values to axisValues
+  const axisValues: AxisValue[] | undefined = api.axis_values?.map(av => ({
+    variantId: av.variant_id,
+    axisId: av.axis_id,
+    axisAttributeCode: av.axis_attribute_code,
+    optionCode: av.option_code,
+    axisLabel: av.axis_label,
+    optionLabel: av.option_label,
+  }));
+
+  // Build variantAxes from axis_values if not provided directly
+  let variantAxes = api.variant_axes;
+  if (!variantAxes && api.axis_values && api.axis_values.length > 0) {
+    variantAxes = {};
+    for (const av of api.axis_values) {
+      variantAxes[av.axis_label.de || av.axis_label.en || av.axis_attribute_code] =
+        av.option_label.de || av.option_label.en || av.option_code;
+    }
+  }
+
   return {
     id: api.id,
     tenantId: api.tenant_id,
@@ -152,11 +212,12 @@ export function mapApiProduct(api: ApiProduct): Product {
       isPrimary: img.is_primary,
       sortOrder: img.sort_order,
     })),
-    attributes: api.attributes,
+    attributes: Object.keys(attributesRecord).length > 0 ? attributesRecord : undefined,
     createdAt: api.created_at,
     updatedAt: api.updated_at,
-    parentProductId: api.parent_product_id,
-    variantAxes: api.variant_axes,
+    parentProductId: api.parent_id,
+    variantAxes,
+    axisValues,
     categoryIds: api.category_ids || [],
   };
 }
@@ -170,7 +231,7 @@ export function mapApiCategory(api: ApiCategory): Category {
     description: api.description,
     parentId: api.parent_id,
     sortOrder: api.sort_order,
-    isActive: api.is_active,
+    isActive: api.active, // API uses 'active' not 'is_active'
     productCount: api.product_count,
   };
 }

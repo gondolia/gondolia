@@ -406,7 +406,7 @@ function PricesTab({
   onToast: (type: "success" | "error", message: string) => void;
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newPrice, setNewPrice] = useState({ minQuantity: 1, price: 0, currency: "EUR" });
+  const [newPrice, setNewPrice] = useState({ minQuantity: 1, price: 0, currency: "CHF" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<PriceScale>>({});
 
@@ -415,7 +415,7 @@ function PricesTab({
       await pimApiClient.createPrice(productId, newPrice);
       onToast("success", "Preis erfolgreich hinzugefügt");
       setShowAddForm(false);
-      setNewPrice({ minQuantity: 1, price: 0, currency: "EUR" });
+      setNewPrice({ minQuantity: 1, price: 0, currency: "CHF" });
       onUpdate();
     } catch (error: any) {
       onToast("error", error.message || "Fehler beim Hinzufügen");
@@ -487,6 +487,7 @@ function PricesTab({
                 onChange={(e) => setNewPrice({ ...newPrice, currency: e.target.value })}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               >
+                <option value="CHF">CHF</option>
                 <option value="EUR">EUR</option>
                 <option value="USD">USD</option>
                 <option value="GBP">GBP</option>
@@ -1033,7 +1034,15 @@ function VariantsTab({ product, variants }: { product: Product; variants: Produc
                     {variant.name.de || variant.name.en}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500">
-                    {variant.variantAxes ? Object.entries(variant.variantAxes).map(([k, v]) => `${k}: ${v}`).join(", ") : "-"}
+                    {variant.variantAxes
+                      ? Object.entries(variant.variantAxes).map(([k, v]) => `${k}: ${v}`).join(", ")
+                      : variant.attributes && Object.keys(variant.attributes).length > 0
+                      ? Object.entries(variant.attributes)
+                          .filter(([k]) => !['manufacturer', 'weight', 'dimensions'].includes(k))
+                          .slice(0, 3)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(", ")
+                      : "-"}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span

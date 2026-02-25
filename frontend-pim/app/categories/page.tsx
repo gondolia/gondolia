@@ -26,6 +26,13 @@ export default function CategoriesPage() {
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newCategory, setNewCategory] = useState({
+    code: "",
+    nameDe: "",
+    nameEn: "",
+    parentId: "",
+  });
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message });
@@ -108,6 +115,36 @@ export default function CategoriesPage() {
     setExpandedIds(newExpanded);
   };
 
+  const handleCreateCategory = async () => {
+    if (!newCategory.code || !newCategory.nameDe) {
+      showToast("error", "Bitte Code und Name (DE) ausfüllen");
+      return;
+    }
+    try {
+      await pimApiClient.createCategory({
+        code: newCategory.code,
+        name: { de: newCategory.nameDe, en: newCategory.nameEn },
+        parentId: newCategory.parentId || undefined,
+        sortOrder: 0,
+        isActive: true,
+      });
+      showToast("success", "Kategorie erfolgreich erstellt");
+      setShowNewForm(false);
+      setNewCategory({ code: "", nameDe: "", nameEn: "", parentId: "" });
+      await fetchCategories();
+    } catch (error: any) {
+      showToast("error", error.message || "Fehler beim Erstellen");
+    }
+  };
+
+  // Flatten categories for parent selection dropdown
+  const flattenCategoriesForSelect = (cats: Category[], prefix = ""): { id: string; label: string }[] => {
+    return cats.flatMap(cat => [
+      { id: cat.id, label: prefix + (cat.name.de || cat.code) },
+      ...(cat.children ? flattenCategoriesForSelect(cat.children, prefix + "— ") : []),
+    ]);
+  };
+
   const renderCategory = (category: Category, level: number = 0) => {
     const hasChildren = category.children && category.children.length > 0;
     const isExpanded = expandedIds.has(category.id);
@@ -183,11 +220,72 @@ export default function CategoriesPage() {
               Kategorie-Hierarchie verwalten
             </p>
           </div>
-          <button className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700">
-            <Plus className="h-4 w-4" />
-            Neue Kategorie
+          <button
+            onClick={() => setShowNewForm(!showNewForm)}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+          >
+            {showNewForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showNewForm ? "Abbrechen" : "Neue Kategorie"}
           </button>
         </div>
+
+        {/* New Category Form */}
+        {showNewForm && (
+          <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200">
+            <h3 className="mb-4 text-sm font-semibold uppercase text-gray-500">Neue Kategorie erstellen</h3>
+            <div className="grid gap-4 md:grid-cols-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Code *</label>
+                <input
+                  type="text"
+                  value={newCategory.code}
+                  onChange={(e) => setNewCategory({ ...newCategory, code: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="z.B. NEW_CAT"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Name (DE) *</label>
+                <input
+                  type="text"
+                  value={newCategory.nameDe}
+                  onChange={(e) => setNewCategory({ ...newCategory, nameDe: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Name (EN)</label>
+                <input
+                  type="text"
+                  value={newCategory.nameEn}
+                  onChange={(e) => setNewCategory({ ...newCategory, nameEn: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Übergeordnete Kategorie</label>
+                <select
+                  value={newCategory.parentId}
+                  onChange={(e) => setNewCategory({ ...newCategory, parentId: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                >
+                  <option value="">Keine (Root-Kategorie)</option>
+                  {flattenCategoriesForSelect(categories).map(opt => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={handleCreateCategory}
+                  className="w-full rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  Erstellen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Layout: Tree on left, Details on right */}
         <div className="grid gap-6 lg:grid-cols-3">
