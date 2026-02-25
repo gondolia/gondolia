@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuthStore } from "@/lib/stores/authStore";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
+import { CartIcon } from "@/components/cart/CartIcon";
 import { cn } from "@/lib/utils";
 
 export function Header() {
@@ -66,6 +67,9 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Cart Icon */}
+            <CartIcon />
+
             {company && (
               <span className="hidden sm:block text-sm text-gray-500 dark:text-gray-400">
                 {company.name}

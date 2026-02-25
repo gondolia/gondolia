@@ -51,10 +51,39 @@ const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID || "demo";
 class ApiClient {
   private baseUrl: string;
   private tenantId: string;
+  private sessionIdKey = "gondolia_session_id";
 
   constructor(baseUrl: string, tenantId: string) {
     this.baseUrl = baseUrl;
     this.tenantId = tenantId;
+  }
+
+  // Get or create session ID for guest carts
+  private getSessionId(): string {
+    if (typeof window === "undefined") return "";
+
+    let sessionId = localStorage.getItem(this.sessionIdKey);
+    if (!sessionId) {
+      sessionId = this.generateUUID();
+      localStorage.setItem(this.sessionIdKey, sessionId);
+    }
+    return sessionId;
+  }
+
+  // Generate UUID without crypto.randomUUID (works in non-secure contexts)
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  // Clear session ID (called on login to merge carts)
+  private clearSessionId(): void {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(this.sessionIdKey);
+    }
   }
 
   private async request<T>(
@@ -73,6 +102,13 @@ class ApiClient {
     if (accessToken) {
       (headers as Record<string, string>)["Authorization"] =
         `Bearer ${accessToken}`;
+    }
+
+    // Always include session ID if available - needed for cart claiming during checkout
+    // When user logs in, their guest cart (created with session_id) should be claimed
+    const sessionId = this.getSessionId();
+    if (sessionId) {
+      (headers as Record<string, string>)["X-Session-ID"] = sessionId;
     }
 
     const response = await fetch(`${this.baseUrl}${path}`, {
@@ -603,6 +639,112 @@ class ApiClient {
       selected: response.selected,
       available,
     };
+  }
+
+  // ==================== CART API ====================
+
+  // Get current cart
+  async getCart(): Promise<import("@/types/cart").Cart> {
+    const response = await this.request<import("@/types/cart").ApiCart>("/api/v1/cart");
+    const { mapApiCart } = await import("@/types/cart");
+    return mapApiCart(response);
+  }
+
+  // Add item to cart
+  async addToCart(request: import("@/types/cart").AddToCartRequest): Promise<import("@/types/cart").Cart> {
+    const response = await this.request<import("@/types/cart").ApiCart>("/api/v1/cart/items", {
+      method: "POST",
+      body: JSON.stringify({
+        product_id: request.productId,
+        variant_id: request.variantId,
+        quantity: request.quantity,
+        configuration: request.configuration,
+      }),
+    });
+    const { mapApiCart } = await import("@/types/cart");
+    return mapApiCart(response);
+  }
+
+  // Update cart item quantity
+  async updateCartItem(itemId: string, request: import("@/types/cart").UpdateCartItemRequest): Promise<import("@/types/cart").Cart> {
+    const response = await this.request<import("@/types/cart").ApiCart>(`/api/v1/cart/items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ quantity: request.quantity }),
+    });
+    const { mapApiCart } = await import("@/types/cart");
+    return mapApiCart(response);
+  }
+
+  // Remove cart item
+  async removeCartItem(itemId: string): Promise<import("@/types/cart").Cart> {
+    const response = await this.request<import("@/types/cart").ApiCart>(`/api/v1/cart/items/${itemId}`, {
+      method: "DELETE",
+    });
+    const { mapApiCart } = await import("@/types/cart");
+    return mapApiCart(response);
+  }
+
+  // Clear entire cart
+  async clearCart(): Promise<void> {
+    await this.request<void>("/api/v1/cart", {
+      method: "DELETE",
+    });
+  }
+
+  // Validate cart (prices, availability)
+  async validateCart(): Promise<import("@/types/cart").Cart> {
+    const response = await this.request<import("@/types/cart").ApiCart>("/api/v1/cart/validate", {
+      method: "POST",
+    });
+    const { mapApiCart } = await import("@/types/cart");
+    return mapApiCart(response);
+  }
+
+  // ==================== ORDER API ====================
+
+  // Checkout (convert cart to order)
+  async checkout(request: import("@/types/cart").CheckoutRequest): Promise<import("@/types/cart").CheckoutResponse> {
+    const response = await this.request<{ data?: import("@/types/cart").ApiOrder; order?: import("@/types/cart").ApiOrder }>("/api/v1/orders/checkout", {
+      method: "POST",
+      body: JSON.stringify({
+        shipping_address: request.shippingAddress,
+        billing_address: request.billingAddress,
+        notes: request.notes,
+      }),
+    });
+
+    // Handle different response formats from the API
+    // Backend may return { data: {...} } or { order: {...} }
+    const orderData = response.data || response.order;
+    if (!orderData) {
+      throw { code: "INVALID_RESPONSE", message: "Keine Bestelldaten erhalten" };
+    }
+
+    const { mapApiOrder } = await import("@/types/cart");
+    return { order: mapApiOrder(orderData) };
+  }
+
+  // Get user's orders
+  async getOrders(): Promise<import("@/types/cart").Order[]> {
+    const response = await this.request<{ data: import("@/types/cart").ApiOrder[] }>("/api/v1/orders");
+    const { mapApiOrder } = await import("@/types/cart");
+    return (response.data || []).map(mapApiOrder);
+  }
+
+  // Get order by ID
+  async getOrder(orderId: string): Promise<import("@/types/cart").Order> {
+    const response = await this.request<import("@/types/cart").ApiOrder>(`/api/v1/orders/${orderId}`);
+    const { mapApiOrder } = await import("@/types/cart");
+    return mapApiOrder(response);
+  }
+
+  // Cancel order
+  async cancelOrder(orderId: string): Promise<import("@/types/cart").Order> {
+    const response = await this.request<import("@/types/cart").ApiOrder>(`/api/v1/orders/${orderId}/cancel`, {
+      method: "PATCH",
+    });
+    const { mapApiOrder } = await import("@/types/cart");
+    return mapApiOrder(response);
   }
 
   // ==================== BUNDLE API ====================
