@@ -99,9 +99,31 @@ export default function ProductsPage() {
         offset,
         includeChildren: true, // Backend handles subcategories server-side
       });
+    } else if (searchQ) {
+      // Use Meilisearch for text search (better relevance than DB LIKE)
+      const params = new URLSearchParams();
+      params.set("q", searchQ);
+      if (typeFilter) params.set("type", typeFilter);
+      params.set("limit", PAGE_SIZE.toString());
+      params.set("offset", offset.toString());
+      const searchResult = await apiClient.get<{
+        hits: Array<{ id: string; product_type: string }>;
+        total_hits: number;
+      }>(`/api/v1/search?${params.toString()}`);
+      
+      // Fetch full product data for each hit from Catalog API
+      const fullProducts = await Promise.all(
+        searchResult.hits.map((hit) =>
+          apiClient.getProduct(hit.id).catch(() => null)
+        )
+      );
+      
+      data = {
+        items: fullProducts.filter(Boolean) as any[],
+        total: searchResult.total_hits,
+      };
     } else {
       data = await apiClient.getProducts({
-        q: searchQ,
         productType: typeFilter,
         limit: PAGE_SIZE,
         offset,
