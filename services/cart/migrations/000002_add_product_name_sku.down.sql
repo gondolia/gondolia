@@ -1,0 +1,2 @@
+ALTER TABLE cart_items DROP COLUMN IF EXISTS product_name;
+ALTER TABLE cart_items DROP COLUMN IF EXISTS sku;
