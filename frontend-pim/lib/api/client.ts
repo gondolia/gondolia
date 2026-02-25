@@ -14,6 +14,7 @@ import type {
   PaginatedResponse,
   ProductSearchParams,
   BundleComponent,
+  ProductStatus,
   mapApiProduct,
   mapApiCategory,
   mapApiPriceScale,
@@ -243,9 +244,13 @@ class PimApiClient {
     if (!product || !product.categoryIds || product.categoryIds.length === 0) {
       return [];
     }
-    // Fetch all categories and filter by product's category_ids
-    const allCategories = await this.getCategories();
-    return allCategories.filter(c => product.categoryIds.includes(c.id));
+    // Fetch all categories and flatten tree to find matching ones
+    const categoriesTree = await this.getCategories();
+    const flattenCategories = (cats: Category[]): Category[] => {
+      return cats.flatMap(c => [c, ...(c.children ? flattenCategories(c.children) : [])]);
+    };
+    const allCategories = flattenCategories(categoriesTree);
+    return allCategories.filter(c => product.categoryIds?.includes(c.id));
   }
 
   async getBundleComponents(productId: string): Promise<BundleComponent[]> {

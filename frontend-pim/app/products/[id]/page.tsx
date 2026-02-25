@@ -244,7 +244,18 @@ function MasterDataTab({
   onEdit: (data: Partial<Product>) => void;
 }) {
   const getValue = (field: keyof Product) => {
-    return editedProduct[field] !== undefined ? editedProduct[field] : product[field];
+    if (editedProduct[field] !== undefined) {
+      return editedProduct[field];
+    }
+    return product[field];
+  };
+
+  const getCurrentName = () => {
+    return editedProduct.name || product.name;
+  };
+
+  const getCurrentDescription = () => {
+    return editedProduct.description || product.description;
   };
 
   return (
@@ -256,11 +267,11 @@ function MasterDataTab({
           </label>
           <input
             type="text"
-            value={(getValue("name") as Record<string, string>)?.de || ""}
+            value={getCurrentName()?.de || ""}
             onChange={(e) =>
               onEdit({
                 ...editedProduct,
-                name: { ...(getValue("name") as Record<string, string>), de: e.target.value },
+                name: { ...getCurrentName(), de: e.target.value },
               })
             }
             className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -272,11 +283,11 @@ function MasterDataTab({
           </label>
           <input
             type="text"
-            value={(getValue("name") as Record<string, string>)?.en || ""}
+            value={getCurrentName()?.en || ""}
             onChange={(e) =>
               onEdit({
                 ...editedProduct,
-                name: { ...(getValue("name") as Record<string, string>), en: e.target.value },
+                name: { ...getCurrentName(), en: e.target.value },
               })
             }
             className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -290,12 +301,12 @@ function MasterDataTab({
             Beschreibung (DE)
           </label>
           <textarea
-            value={(getValue("description") as Record<string, string> | undefined)?.de || ""}
+            value={getCurrentDescription()?.de || ""}
             onChange={(e) =>
               onEdit({
                 ...editedProduct,
                 description: {
-                  ...(getValue("description") as Record<string, string> | undefined),
+                  ...getCurrentDescription(),
                   de: e.target.value,
                 },
               })
@@ -309,12 +320,12 @@ function MasterDataTab({
             Beschreibung (EN)
           </label>
           <textarea
-            value={(getValue("description") as Record<string, string> | undefined)?.en || ""}
+            value={getCurrentDescription()?.en || ""}
             onChange={(e) =>
               onEdit({
                 ...editedProduct,
                 description: {
-                  ...(getValue("description") as Record<string, string> | undefined),
+                  ...getCurrentDescription(),
                   en: e.target.value,
                 },
               })
@@ -752,7 +763,7 @@ function AttributesTab({
 }) {
   const attributes = product.attributes || {};
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newAttr, setNewAttr] = useState({ key: "", type: "string", value: "" });
+  const [newAttr, setNewAttr] = useState({ key: "", type: "text", value: "" });
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<any>("");
 
@@ -765,7 +776,7 @@ function AttributesTab({
       await pimApiClient.createAttribute(productId, newAttr.key, newAttr.type, parseValue(newAttr.value, newAttr.type));
       onToast("success", "Attribut erfolgreich hinzugefügt");
       setShowAddForm(false);
-      setNewAttr({ key: "", type: "string", value: "" });
+      setNewAttr({ key: "", type: "text", value: "" });
       onUpdate();
     } catch (error: any) {
       onToast("error", error.message || "Fehler beim Hinzufügen");
@@ -774,7 +785,8 @@ function AttributesTab({
 
   const handleUpdate = async (key: string) => {
     try {
-      await pimApiClient.updateAttribute(productId, key, editValue);
+      const parsedValue = typeof editValue === "string" ? tryParseJSON(editValue) : editValue;
+      await pimApiClient.updateAttribute(productId, key, parsedValue);
       onToast("success", "Attribut erfolgreich aktualisiert");
       setEditingKey(null);
       setEditValue("");
@@ -800,6 +812,33 @@ function AttributesTab({
     if (type === "boolean") return val === "true";
     if (type === "json") return JSON.parse(val);
     return val;
+  };
+
+  const tryParseJSON = (val: string) => {
+    try {
+      return JSON.parse(val);
+    } catch {
+      return val;
+    }
+  };
+
+  const formatAttributeValue = (value: any): string => {
+    if (value === null || value === undefined) return "-";
+    if (typeof value === "object") {
+      // Check if it's a metric value
+      if (value.value !== undefined && value.unit !== undefined) {
+        return `${value.value} ${value.unit}`;
+      }
+      // Check if it's an i18n value
+      if (value.de !== undefined || value.en !== undefined) {
+        const parts = [];
+        if (value.de) parts.push(`DE: ${value.de}`);
+        if (value.en) parts.push(`EN: ${value.en}`);
+        return parts.join(" | ");
+      }
+      return JSON.stringify(value);
+    }
+    return String(value);
   };
 
   return (
@@ -835,9 +874,12 @@ function AttributesTab({
                 onChange={(e) => setNewAttr({ ...newAttr, type: e.target.value })}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               >
-                <option value="string">String</option>
+                <option value="text">Text</option>
                 <option value="number">Number</option>
                 <option value="boolean">Boolean</option>
+                <option value="metric">Metric (Wert + Einheit)</option>
+                <option value="i18n">I18n (mehrsprachig)</option>
+                <option value="select">Select</option>
                 <option value="json">JSON</option>
               </select>
             </div>
@@ -848,7 +890,15 @@ function AttributesTab({
                 value={newAttr.value}
                 onChange={(e) => setNewAttr({ ...newAttr, value: e.target.value })}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                placeholder={newAttr.type === "json" ? '{"key": "value"}' : "Wert"}
+                placeholder={
+                  newAttr.type === "metric"
+                    ? '{"value": 10, "unit": "kg"}'
+                    : newAttr.type === "i18n"
+                    ? '{"de": "Text", "en": "Text"}'
+                    : newAttr.type === "json"
+                    ? '{"key": "value"}'
+                    : "Wert"
+                }
               />
             </div>
             <div className="flex items-end">
@@ -906,7 +956,7 @@ function AttributesTab({
                   <div>
                     <p className="font-medium text-gray-900">{key}</p>
                     <p className="text-sm text-gray-500">
-                      {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                      {formatAttributeValue(value)}
                     </p>
                   </div>
                   <div>

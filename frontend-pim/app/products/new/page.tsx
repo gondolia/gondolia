@@ -45,10 +45,10 @@ export default function NewProductPage() {
           de: formData.nameDe,
           en: formData.nameEn,
         },
-        description: {
+        description: (formData.descriptionDe || formData.descriptionEn) ? {
           de: formData.descriptionDe,
           en: formData.descriptionEn,
-        },
+        } : undefined,
         manufacturer: formData.manufacturer || undefined,
         manufacturerPartNumber: formData.manufacturerPartNumber || undefined,
         parentProductId: parentId || undefined,
