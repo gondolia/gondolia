@@ -337,3 +337,140 @@ func (h *CategoryHandler) GetProducts(c *gin.Context) {
 		"offset": filter.Offset,
 	})
 }
+
+// UpdateSortOrder handles PATCH /categories/:id/sort
+func (h *CategoryHandler) UpdateSortOrder(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid category ID",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		SortOrder int `json:"sort_order" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	category, err := h.categoryService.UpdateSortOrder(c.Request.Context(), id, req.SortOrder)
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		if domain.IsNotFoundError(err) {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		}
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"code":    code,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, category)
+}
+
+// AddProduct handles POST /categories/:id/products
+func (h *CategoryHandler) AddProduct(c *gin.Context) {
+	categoryID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid category ID",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		ProductID uuid.UUID `json:"product_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	if err := h.categoryService.AddProduct(c.Request.Context(), categoryID, req.ProductID); err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		if domain.IsNotFoundError(err) {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		} else if domain.IsValidationError(err) {
+			status = http.StatusBadRequest
+			code = "VALIDATION_ERROR"
+		}
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"code":    code,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// RemoveProduct handles DELETE /categories/:id/products/:productId
+func (h *CategoryHandler) RemoveProduct(c *gin.Context) {
+	categoryID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid category ID",
+			},
+		})
+		return
+	}
+
+	productID, err := uuid.Parse(c.Param("productId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid product ID",
+			},
+		})
+		return
+	}
+
+	if err := h.categoryService.RemoveProduct(c.Request.Context(), categoryID, productID); err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		if domain.IsNotFoundError(err) {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		}
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"code":    code,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

@@ -28,6 +28,9 @@ var (
 	ErrTooManyAxes                = errors.New("variant parent cannot have more than 4 axes")
 	ErrDuplicateVariantCombination = errors.New("variant with these axis values already exists")
 
+	// Attribute errors
+	ErrAttributeNotFound = errors.New("attribute not found")
+
 	// General errors
 	ErrUnauthorized = errors.New("unauthorized")
 	ErrForbidden    = errors.New("forbidden")
@@ -38,7 +41,8 @@ func IsNotFoundError(err error) bool {
 	return errors.Is(err, ErrProductNotFound) ||
 		errors.Is(err, ErrCategoryNotFound) ||
 		errors.Is(err, ErrPriceNotFound) ||
-		errors.Is(err, ErrTenantNotFound)
+		errors.Is(err, ErrTenantNotFound) ||
+		errors.Is(err, ErrAttributeNotFound)
 }
 
 // IsValidationError checks if error is a validation error
@@ -50,5 +54,6 @@ func IsValidationError(err error) bool {
 		errors.Is(err, ErrPriceOverlap) ||
 		errors.Is(err, ErrProductInvalidStatus) ||
 		errors.Is(err, ErrTooManyAxes) ||
-		errors.Is(err, ErrDuplicateVariantCombination)
+		errors.Is(err, ErrDuplicateVariantCombination) ||
+		errors.Is(err, ErrCategoryHasProducts)
 }

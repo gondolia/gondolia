@@ -275,3 +275,247 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// UpdateStatus handles PATCH /products/:id/status
+func (h *ProductHandler) UpdateStatus(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid product ID",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		Status domain.ProductStatus `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Validate status
+	if req.Status != domain.ProductStatusActive && req.Status != domain.ProductStatusDraft && req.Status != domain.ProductStatusArchived {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "invalid status, must be one of: active, draft, archived",
+			},
+		})
+		return
+	}
+
+	product, err := h.productService.UpdateStatus(c.Request.Context(), id, req.Status)
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		if domain.IsNotFoundError(err) {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		}
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"code":    code,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, product)
+}
+
+// AddAttribute handles POST /products/:id/attributes
+func (h *ProductHandler) AddAttribute(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid product ID",
+			},
+		})
+		return
+	}
+
+	var req domain.ProductAttribute
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Validate attribute key
+	if req.Key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "attribute key is required",
+			},
+		})
+		return
+	}
+
+	// Validate attribute type
+	if req.Type != domain.AttributeTypeText && req.Type != domain.AttributeTypeNumber &&
+		req.Type != domain.AttributeTypeBoolean && req.Type != domain.AttributeTypeDate {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "invalid attribute type",
+			},
+		})
+		return
+	}
+
+	product, err := h.productService.AddAttribute(c.Request.Context(), id, req)
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		if domain.IsNotFoundError(err) {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		} else if domain.IsValidationError(err) {
+			status = http.StatusBadRequest
+			code = "VALIDATION_ERROR"
+		}
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"code":    code,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, product)
+}
+
+// UpdateAttribute handles PUT /products/:id/attributes/:key
+func (h *ProductHandler) UpdateAttribute(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid product ID",
+			},
+		})
+		return
+	}
+
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "attribute key is required",
+			},
+		})
+		return
+	}
+
+	var req domain.ProductAttribute
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Ensure the key in the request matches the URL parameter
+	req.Key = key
+
+	// Validate attribute type
+	if req.Type != domain.AttributeTypeText && req.Type != domain.AttributeTypeNumber &&
+		req.Type != domain.AttributeTypeBoolean && req.Type != domain.AttributeTypeDate {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "invalid attribute type",
+			},
+		})
+		return
+	}
+
+	product, err := h.productService.UpdateAttribute(c.Request.Context(), id, key, req)
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		if domain.IsNotFoundError(err) {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		} else if domain.IsValidationError(err) {
+			status = http.StatusBadRequest
+			code = "VALIDATION_ERROR"
+		}
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"code":    code,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, product)
+}
+
+// DeleteAttribute handles DELETE /products/:id/attributes/:key
+func (h *ProductHandler) DeleteAttribute(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "invalid product ID",
+			},
+		})
+		return
+	}
+
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "attribute key is required",
+			},
+		})
+		return
+	}
+
+	product, err := h.productService.DeleteAttribute(c.Request.Context(), id, key)
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "INTERNAL_ERROR"
+		if domain.IsNotFoundError(err) {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		}
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"code":    code,
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, product)
+}

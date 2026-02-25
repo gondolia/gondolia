@@ -13,12 +13,14 @@ import (
 // CategoryService handles category business logic
 type CategoryService struct {
 	categoryRepo repository.CategoryRepository
+	productRepo  repository.ProductRepository
 }
 
 // NewCategoryService creates a new category service
-func NewCategoryService(categoryRepo repository.CategoryRepository) *CategoryService {
+func NewCategoryService(categoryRepo repository.CategoryRepository, productRepo repository.ProductRepository) *CategoryService {
 	return &CategoryService{
 		categoryRepo: categoryRepo,
+		productRepo:  productRepo,
 	}
 }
 
@@ -164,4 +166,85 @@ func (s *CategoryService) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return s.categoryRepo.Delete(ctx, id)
+}
+
+// UpdateSortOrder updates the sort order of a category
+func (s *CategoryService) UpdateSortOrder(ctx context.Context, id uuid.UUID, sortOrder int) (*domain.Category, error) {
+	category, err := s.categoryRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	category.SortOrder = sortOrder
+	category.UpdatedAt = time.Now()
+
+	if err := s.categoryRepo.Update(ctx, category); err != nil {
+		return nil, err
+	}
+
+	return category, nil
+}
+
+// AddProduct assigns a product to a category
+func (s *CategoryService) AddProduct(ctx context.Context, categoryID, productID uuid.UUID) error {
+	// Verify category exists
+	category, err := s.categoryRepo.GetByID(ctx, categoryID)
+	if err != nil {
+		return err
+	}
+
+	// Verify product exists and belongs to same tenant
+	product, err := s.productRepo.GetByID(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	if product.TenantID != category.TenantID {
+		return domain.ErrProductNotFound
+	}
+
+	// Check if product already in category
+	for _, cid := range product.CategoryIDs {
+		if cid == categoryID {
+			return nil // Already assigned, idempotent operation
+		}
+	}
+
+	// Add category to product's category list
+	product.CategoryIDs = append(product.CategoryIDs, categoryID)
+	product.UpdatedAt = time.Now()
+
+	return s.productRepo.Update(ctx, product)
+}
+
+// RemoveProduct removes a product from a category
+func (s *CategoryService) RemoveProduct(ctx context.Context, categoryID, productID uuid.UUID) error {
+	// Verify category exists
+	category, err := s.categoryRepo.GetByID(ctx, categoryID)
+	if err != nil {
+		return err
+	}
+
+	// Verify product exists and belongs to same tenant
+	product, err := s.productRepo.GetByID(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	if product.TenantID != category.TenantID {
+		return domain.ErrProductNotFound
+	}
+
+	// Remove category from product's category list
+	newCategoryIDs := make([]uuid.UUID, 0, len(product.CategoryIDs))
+	for _, cid := range product.CategoryIDs {
+		if cid != categoryID {
+			newCategoryIDs = append(newCategoryIDs, cid)
+		}
+	}
+
+	product.CategoryIDs = newCategoryIDs
+	product.UpdatedAt = time.Now()
+
+	return s.productRepo.Update(ctx, product)
 }

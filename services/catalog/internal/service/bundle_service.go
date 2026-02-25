@@ -141,6 +141,182 @@ func (s *BundleService) SetComponents(ctx context.Context, bundleProductID uuid.
 	return s.bundleRepo.SetComponents(ctx, bundleProductID, components)
 }
 
+// AddComponent adds a new component to a bundle
+func (s *BundleService) AddComponent(ctx context.Context, bundleProductID uuid.UUID, tenantID uuid.UUID, req domain.BundleComponentRequest) (*domain.BundleComponent, error) {
+	// Verify bundle exists
+	bundle, err := s.productRepo.GetByID(ctx, bundleProductID)
+	if err != nil {
+		return nil, err
+	}
+	if bundle.ProductType != domain.ProductTypeBundle {
+		return nil, domain.ErrBundleNotFound
+	}
+
+	// Load component product
+	product, err := s.productRepo.GetByID(ctx, req.ComponentProductID)
+	if err != nil {
+		return nil, fmt.Errorf("component product %s: %w", req.ComponentProductID, err)
+	}
+
+	// Validate component type
+	if err := domain.ValidateComponent(product); err != nil {
+		return nil, fmt.Errorf("component %s (%s): %w", product.SKU, product.ProductType, err)
+	}
+
+	// Build component
+	component := domain.BundleComponent{
+		ID:                 uuid.New(),
+		TenantID:           tenantID,
+		BundleProductID:    bundleProductID,
+		ComponentProductID: req.ComponentProductID,
+		Quantity:           req.Quantity,
+		MinQuantity:        req.MinQuantity,
+		MaxQuantity:        req.MaxQuantity,
+		SortOrder:          req.SortOrder,
+		DefaultParameters:  req.DefaultParameters,
+	}
+
+	// Validate quantity constraints
+	if component.MinQuantity != nil && component.Quantity < *component.MinQuantity {
+		return nil, fmt.Errorf("component %s: default quantity %d is less than min %d", product.SKU, component.Quantity, *component.MinQuantity)
+	}
+	if component.MaxQuantity != nil && component.Quantity > *component.MaxQuantity {
+		return nil, fmt.Errorf("component %s: default quantity %d exceeds max %d", product.SKU, component.Quantity, *component.MaxQuantity)
+	}
+	if component.MinQuantity != nil && component.MaxQuantity != nil && *component.MinQuantity > *component.MaxQuantity {
+		return nil, fmt.Errorf("component %s: min_quantity %d exceeds max_quantity %d", product.SKU, *component.MinQuantity, *component.MaxQuantity)
+	}
+
+	// Get existing components and append the new one
+	existingComponents, err := s.bundleRepo.GetComponents(ctx, bundleProductID)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedComponents := append(existingComponents, component)
+
+	// Save all components
+	if err := s.bundleRepo.SetComponents(ctx, bundleProductID, updatedComponents); err != nil {
+		return nil, err
+	}
+
+	return &component, nil
+}
+
+// UpdateComponent updates an existing component in a bundle
+func (s *BundleService) UpdateComponent(ctx context.Context, bundleProductID uuid.UUID, componentID uuid.UUID, req domain.BundleComponentRequest) (*domain.BundleComponent, error) {
+	// Verify bundle exists
+	bundle, err := s.productRepo.GetByID(ctx, bundleProductID)
+	if err != nil {
+		return nil, err
+	}
+	if bundle.ProductType != domain.ProductTypeBundle {
+		return nil, domain.ErrBundleNotFound
+	}
+
+	// Load component product
+	product, err := s.productRepo.GetByID(ctx, req.ComponentProductID)
+	if err != nil {
+		return nil, fmt.Errorf("component product %s: %w", req.ComponentProductID, err)
+	}
+
+	// Validate component type
+	if err := domain.ValidateComponent(product); err != nil {
+		return nil, fmt.Errorf("component %s (%s): %w", product.SKU, product.ProductType, err)
+	}
+
+	// Get existing components
+	existingComponents, err := s.bundleRepo.GetComponents(ctx, bundleProductID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find and update the component
+	found := false
+	var updatedComponent domain.BundleComponent
+	for i := range existingComponents {
+		if existingComponents[i].ID == componentID {
+			// Ensure component belongs to this bundle
+			if existingComponents[i].BundleProductID != bundleProductID {
+				return nil, domain.ErrComponentNotFound
+			}
+
+			existingComponents[i].ComponentProductID = req.ComponentProductID
+			existingComponents[i].Quantity = req.Quantity
+			existingComponents[i].MinQuantity = req.MinQuantity
+			existingComponents[i].MaxQuantity = req.MaxQuantity
+			existingComponents[i].SortOrder = req.SortOrder
+			existingComponents[i].DefaultParameters = req.DefaultParameters
+
+			// Validate quantity constraints
+			if existingComponents[i].MinQuantity != nil && existingComponents[i].Quantity < *existingComponents[i].MinQuantity {
+				return nil, fmt.Errorf("component %s: default quantity %d is less than min %d", product.SKU, existingComponents[i].Quantity, *existingComponents[i].MinQuantity)
+			}
+			if existingComponents[i].MaxQuantity != nil && existingComponents[i].Quantity > *existingComponents[i].MaxQuantity {
+				return nil, fmt.Errorf("component %s: default quantity %d exceeds max %d", product.SKU, existingComponents[i].Quantity, *existingComponents[i].MaxQuantity)
+			}
+			if existingComponents[i].MinQuantity != nil && existingComponents[i].MaxQuantity != nil && *existingComponents[i].MinQuantity > *existingComponents[i].MaxQuantity {
+				return nil, fmt.Errorf("component %s: min_quantity %d exceeds max_quantity %d", product.SKU, *existingComponents[i].MinQuantity, *existingComponents[i].MaxQuantity)
+			}
+
+			updatedComponent = existingComponents[i]
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil, domain.ErrComponentNotFound
+	}
+
+	// Save all components
+	if err := s.bundleRepo.SetComponents(ctx, bundleProductID, existingComponents); err != nil {
+		return nil, err
+	}
+
+	return &updatedComponent, nil
+}
+
+// DeleteComponent removes a component from a bundle
+func (s *BundleService) DeleteComponent(ctx context.Context, bundleProductID uuid.UUID, componentID uuid.UUID) error {
+	// Verify bundle exists
+	bundle, err := s.productRepo.GetByID(ctx, bundleProductID)
+	if err != nil {
+		return err
+	}
+	if bundle.ProductType != domain.ProductTypeBundle {
+		return domain.ErrBundleNotFound
+	}
+
+	// Get existing components
+	existingComponents, err := s.bundleRepo.GetComponents(ctx, bundleProductID)
+	if err != nil {
+		return err
+	}
+
+	// Filter out the component to delete
+	updatedComponents := make([]domain.BundleComponent, 0, len(existingComponents))
+	found := false
+	for _, comp := range existingComponents {
+		if comp.ID == componentID {
+			// Ensure component belongs to this bundle
+			if comp.BundleProductID != bundleProductID {
+				return domain.ErrComponentNotFound
+			}
+			found = true
+			continue // Skip this component (delete it)
+		}
+		updatedComponents = append(updatedComponents, comp)
+	}
+
+	if !found {
+		return domain.ErrComponentNotFound
+	}
+
+	// Save updated components list
+	return s.bundleRepo.SetComponents(ctx, bundleProductID, updatedComponents)
+}
+
 // CalculatePrice calculates the total price for a bundle based on customer selections
 func (s *BundleService) CalculatePrice(ctx context.Context, bundleProductID uuid.UUID, req domain.BundlePriceRequest) (*domain.BundlePriceResponse, error) {
 	// Load bundle product

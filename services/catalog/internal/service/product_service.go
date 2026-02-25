@@ -241,6 +241,116 @@ func (s *ProductService) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.productRepo.Delete(ctx, id)
 }
 
+// UpdateStatus updates the status of a product
+func (s *ProductService) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.ProductStatus) (*domain.Product, error) {
+	product, err := s.productRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	product.Status = status
+	product.UpdatedAt = time.Now()
+
+	if err := s.productRepo.Update(ctx, product); err != nil {
+		return nil, err
+	}
+
+	return product, nil
+}
+
+// AddAttribute adds or updates an attribute on a product
+func (s *ProductService) AddAttribute(ctx context.Context, id uuid.UUID, attr domain.ProductAttribute) (*domain.Product, error) {
+	product, err := s.productRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if attribute already exists - if so, update it
+	found := false
+	for i, existing := range product.Attributes {
+		if existing.Key == attr.Key {
+			product.Attributes[i] = attr
+			found = true
+			break
+		}
+	}
+
+	// If not found, append it
+	if !found {
+		product.Attributes = append(product.Attributes, attr)
+	}
+
+	product.UpdatedAt = time.Now()
+
+	if err := s.productRepo.Update(ctx, product); err != nil {
+		return nil, err
+	}
+
+	return product, nil
+}
+
+// UpdateAttribute updates an existing attribute on a product
+func (s *ProductService) UpdateAttribute(ctx context.Context, id uuid.UUID, key string, attr domain.ProductAttribute) (*domain.Product, error) {
+	product, err := s.productRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find and update the attribute
+	found := false
+	for i, existing := range product.Attributes {
+		if existing.Key == key {
+			product.Attributes[i] = attr
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil, domain.ErrAttributeNotFound
+	}
+
+	product.UpdatedAt = time.Now()
+
+	if err := s.productRepo.Update(ctx, product); err != nil {
+		return nil, err
+	}
+
+	return product, nil
+}
+
+// DeleteAttribute removes an attribute from a product
+func (s *ProductService) DeleteAttribute(ctx context.Context, id uuid.UUID, key string) (*domain.Product, error) {
+	product, err := s.productRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter out the attribute to delete
+	newAttributes := make([]domain.ProductAttribute, 0, len(product.Attributes))
+	found := false
+	for _, attr := range product.Attributes {
+		if attr.Key != key {
+			newAttributes = append(newAttributes, attr)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		return nil, domain.ErrAttributeNotFound
+	}
+
+	product.Attributes = newAttributes
+	product.UpdatedAt = time.Now()
+
+	if err := s.productRepo.Update(ctx, product); err != nil {
+		return nil, err
+	}
+
+	return product, nil
+}
+
 // GetByIDWithTranslations retrieves a product by ID with translated attributes
 func (s *ProductService) GetByIDWithTranslations(ctx context.Context, id uuid.UUID, locale string) (*domain.ProductWithTranslatedAttributes, error) {
 	product, err := s.productRepo.GetByID(ctx, id)

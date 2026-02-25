@@ -69,7 +69,7 @@ func main() {
 	// Initialize services
 	productService := service.NewProductService(productRepo, priceRepo, attrTransRepo)
 	variantService := service.NewVariantService(productRepo, priceRepo)
-	categoryService := service.NewCategoryService(categoryRepo)
+	categoryService := service.NewCategoryService(categoryRepo, productRepo)
 	priceService := service.NewPriceService(priceRepo, productRepo)
 	attrTransService := service.NewAttributeTranslationService(attrTransRepo)
 	parametricService := service.NewParametricService(productRepo, parametricPricingRepo, axisOptionRepo, skuMappingRepo)
@@ -127,23 +127,32 @@ func main() {
 		products.GET("/:id", variantHandler.GetProductWithVariants) // Enhanced to include variants
 		products.PUT("/:id", productHandler.Update)
 		products.DELETE("/:id", productHandler.Delete)
-		
+		products.PATCH("/:id/status", productHandler.UpdateStatus) // PIM: Status management
+
 		// Variant endpoints
 		products.GET("/:id/variants", variantHandler.ListVariants)
 		products.POST("/:id/variants", variantHandler.CreateVariant)
 		products.GET("/:id/variants/select", variantHandler.SelectVariant)
 		products.GET("/:id/variants/available", variantHandler.GetAvailableAxisValues)
-		
+
 		// Price endpoints for product
 		products.GET("/:id/prices", priceHandler.ListByProduct)
 		products.POST("/:id/prices", priceHandler.Create)
-		
+
+		// Attribute endpoints (PIM)
+		products.POST("/:id/attributes", productHandler.AddAttribute)
+		products.PUT("/:id/attributes/:key", productHandler.UpdateAttribute)
+		products.DELETE("/:id/attributes/:key", productHandler.DeleteAttribute)
+
 		// Parametric endpoints
 		products.POST("/:id/calculate-price", parametricHandler.CalculatePrice)
 
 		// Bundle endpoints
 		products.GET("/:id/bundle-components", bundleHandler.GetComponents)
 		products.PUT("/:id/bundle-components", bundleHandler.SetComponents)
+		products.POST("/:id/bundle-components", bundleHandler.AddComponent)         // PIM: Add component
+		products.PUT("/:id/bundle-components/:compId", bundleHandler.UpdateComponent) // PIM: Update component
+		products.DELETE("/:id/bundle-components/:compId", bundleHandler.DeleteComponent) // PIM: Delete component
 	}
 
 	// Bundle endpoints (storefront)
@@ -161,7 +170,10 @@ func main() {
 		categories.GET("/:id", categoryHandler.Get)
 		categories.PUT("/:id", categoryHandler.Update)
 		categories.DELETE("/:id", categoryHandler.Delete)
+		categories.PATCH("/:id/sort", categoryHandler.UpdateSortOrder) // PIM: Sort order management
 		categories.GET("/:id/products", categoryHandler.GetProducts) // Products by category
+		categories.POST("/:id/products", categoryHandler.AddProduct)  // PIM: Assign product to category
+		categories.DELETE("/:id/products/:productId", categoryHandler.RemoveProduct) // PIM: Remove product from category
 	}
 
 	// Price endpoints
