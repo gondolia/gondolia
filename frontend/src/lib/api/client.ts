@@ -311,7 +311,7 @@ class ApiClient {
   // Products
   async getProducts(params?: ProductSearchParams): Promise<PaginatedResponse<Product>> {
     const searchParams = new URLSearchParams();
-    if (params?.q) searchParams.set("q", params.q);
+    if (params?.q) searchParams.set("search", params.q);
     if (params?.categoryId) searchParams.set("category_id", params.categoryId);
     if (params?.manufacturerId) searchParams.set("manufacturer_id", params.manufacturerId);
     if (params?.productType) searchParams.set("product_type", params.productType);
