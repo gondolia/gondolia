@@ -6,6 +6,7 @@ import { useAuthStore } from "@/lib/stores/authStore";
 import { apiClient } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
 import { CartIcon } from "@/components/cart/CartIcon";
+import { SearchBar } from "@/components/search/SearchBar";
 import { cn } from "@/lib/utils";
 
 export function Header() {
@@ -67,6 +68,11 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Search Bar */}
+            <div className="hidden lg:block">
+              <SearchBar />
+            </div>
+
             {/* Cart Icon */}
             <CartIcon />
 
