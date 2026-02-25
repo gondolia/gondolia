@@ -200,7 +200,7 @@ services:
       - ./frontend-pim:/app
       - pim_node_modules:/app/node_modules
     environment:
-      NEXT_PUBLIC_CATALOG_URL: http://catalog:8081
+      NEXT_PUBLIC_CATALOG_URL: http://aioc:3001
       NEXT_PUBLIC_TENANT_ID: demo
     ports:
       - "3010:3002"

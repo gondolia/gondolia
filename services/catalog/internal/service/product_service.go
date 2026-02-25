@@ -167,7 +167,11 @@ func (s *ProductService) Create(ctx context.Context, tenantID uuid.UUID, req dom
 	
 	product.Name = req.Name
 	product.Description = req.Description
-	product.CategoryIDs = req.CategoryIDs
+	if req.CategoryIDs != nil {
+		product.CategoryIDs = req.CategoryIDs
+	} else {
+		product.CategoryIDs = []uuid.UUID{}
+	}
 	product.Attributes = req.Attributes
 	product.Images = req.Images
 
