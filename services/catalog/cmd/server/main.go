@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"net"
 	"net/http"
 	"os"
@@ -348,6 +349,7 @@ func configureProductsIndex(ctx context.Context, provider search.SearchProvider,
 	// Configure index settings
 	indexConfig := search.IndexConfig{
 		SearchableAttributes: []string{
+			"search_text",
 			"name.de",
 			"name.en",
 			"description.de",
@@ -401,12 +403,15 @@ func bulkIndexProducts(ctx context.Context, productRepo *postgres.ProductReposit
 
 	docs := make([]search.Document, 0, len(products))
 	for _, p := range products {
+		// Build search_text: flat text with split German compound words
+		searchText := buildSearchText(p.Name, p.Description, p.SKU)
 		doc := search.Document{
 			"id":           p.ID.String(),
 			"tenant_id":    p.TenantID.String(),
 			"sku":          p.SKU,
 			"name":         p.Name,
 			"description":  p.Description,
+			"search_text":  searchText,
 			"product_type": string(p.ProductType),
 			"status":       string(p.Status),
 			"category_ids": p.CategoryIDs,
@@ -422,4 +427,45 @@ func bulkIndexProducts(ctx context.Context, productRepo *postgres.ProductReposit
 
 	logger.Info("Bulk indexing complete", zap.Int("total", len(products)))
 	return nil
+}
+
+// buildSearchText creates a searchable text with split compound words
+func buildSearchText(name, description map[string]string, sku string) string {
+	var parts []string
+	
+	for _, v := range name {
+		parts = append(parts, v)
+		// Split German compound words: "Lederhandschuhe" → "Leder handschuhe"
+		parts = append(parts, splitCompoundWord(v)...)
+	}
+	for _, v := range description {
+		parts = append(parts, v)
+	}
+	parts = append(parts, sku)
+	
+	return strings.Join(parts, " ")
+}
+
+// splitCompoundWord attempts to split German compound words into sub-words
+// Uses a simple heuristic: split at common word boundaries (>= 4 chars each part)
+func splitCompoundWord(word string) []string {
+	word = strings.ToLower(word)
+	words := strings.Fields(word)
+	var result []string
+	
+	for _, w := range words {
+		if len(w) < 8 {
+			continue // too short to be a compound
+		}
+		// Try splitting at each position
+		for i := 4; i <= len(w)-4; i++ {
+			left := w[:i]
+			right := w[i:]
+			// Both parts must be reasonable length
+			if len(left) >= 4 && len(right) >= 4 {
+				result = append(result, left, right)
+			}
+		}
+	}
+	return result
 }
