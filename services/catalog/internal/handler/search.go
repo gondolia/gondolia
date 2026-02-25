@@ -34,6 +34,12 @@ func (h *SearchHandler) Search(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		filters["status"] = status
 	}
+	if productType := c.Query("type"); productType != "" {
+		filters["product_type"] = productType
+	}
+	if category := c.Query("category"); category != "" {
+		filters["category_ids"] = category
+	}
 
 	// Pagination
 	offset := parseInt(c.Query("offset"), 0)

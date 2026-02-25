@@ -44,6 +44,23 @@ services:
       timeout: 3s
       retries: 5
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: true
+      MEILI_MASTER_KEY: gondolia-dev-key
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   identity:
     build:
       context: .
@@ -94,11 +111,15 @@ services:
       REDIS_PORT: "6379"
       ALLOWED_ORIGINS: "*"
       PIM_PROVIDER: mock
-      SEARCH_PROVIDER: mock
+      SEARCH_PROVIDER: meilisearch
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_API_KEY: gondolia-dev-key
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      meilisearch:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
@@ -215,5 +236,6 @@ services:
 
 volumes:
   postgres_data:
+  meilisearch_data:
   frontend_node_modules:
   pim_node_modules:
