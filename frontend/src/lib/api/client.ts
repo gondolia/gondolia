@@ -86,6 +86,10 @@ class ApiClient {
     }
   }
 
+  async get<T>(path: string): Promise<T> {
+    return this.request<T>(path);
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit = {}

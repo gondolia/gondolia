@@ -162,8 +162,8 @@ export default function SearchPage() {
                     product={{
                       id: product.id,
                       sku: product.sku,
-                      name: product.name,
-                      description: product.description,
+                      name: typeof product.name === 'object' ? (product.name.de || product.name.en || '') : product.name,
+                      description: typeof product.description === 'object' ? (product.description.de || product.description.en || '') : (product.description || ''),
                       status: product.status,
                     }}
                   />
