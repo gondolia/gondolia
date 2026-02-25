@@ -1,276 +1,320 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MainLayout } from "@/components/MainLayout";
-import { ArrowLeft, Save } from "lucide-react";
+import { pimApiClient } from "@/lib/api/client";
+import type { ProductType, ProductStatus } from "@/types/catalog";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import Link from "next/link";
-import type { ProductType } from "@/types/catalog";
+
+type Step = 1 | 2 | 3;
 
 export default function NewProductPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
-  const [productType, setProductType] = useState<ProductType>("simple");
+  const searchParams = useSearchParams();
+  const parentId = searchParams.get("parent");
+
+  const [step, setStep] = useState<Step>(1);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     sku: "",
+    productType: (parentId ? "variant" : "simple") as ProductType,
+    status: "draft" as ProductStatus,
     nameDe: "",
     nameEn: "",
     descriptionDe: "",
     descriptionEn: "",
-    status: "draft" as const,
-    basePrice: "",
-    currency: "EUR",
+    manufacturer: "",
+    manufacturerPartNumber: "",
   });
 
-  const handleTypeSelect = (type: ProductType) => {
-    setProductType(type);
-    setStep(2);
+  const handleCreate = async () => {
+    if (!formData.sku || !formData.nameDe) {
+      alert("Bitte SKU und Name (DE) ausfüllen");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const product = await pimApiClient.createProduct({
+        sku: formData.sku,
+        productType: formData.productType,
+        status: formData.status,
+        name: {
+          de: formData.nameDe,
+          en: formData.nameEn,
+        },
+        description: {
+          de: formData.descriptionDe,
+          en: formData.descriptionEn,
+        },
+        manufacturer: formData.manufacturer || undefined,
+        manufacturerPartNumber: formData.manufacturerPartNumber || undefined,
+        parentProductId: parentId || undefined,
+      });
+
+      router.push(`/products/${product.id}`);
+    } catch (error: any) {
+      alert(`Fehler beim Erstellen: ${error.message || "Unbekannter Fehler"}`);
+      setSaving(false);
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: Implement product creation when API is ready
-    alert("Produkt-Erstellung wird implementiert, sobald die Write-API verfügbar ist.");
-  };
-
-  const productTypes = [
-    {
-      type: "simple" as ProductType,
-      title: "Simple Product",
-      description: "Ein einfaches Produkt ohne Varianten oder Konfiguration",
-    },
-    {
-      type: "variant_parent" as ProductType,
-      title: "Variant Parent",
-      description: "Produkt mit Varianten (z.B. verschiedene Farben/Größen)",
-    },
-    {
-      type: "bundle" as ProductType,
-      title: "Bundle Product",
-      description: "Produkt-Bundle aus mehreren Komponenten",
-    },
-    {
-      type: "parametric" as ProductType,
-      title: "Parametric Product",
-      description: "Produkt mit konfigurierbaren Parametern",
-    },
-  ];
+  const canProceedStep1 = formData.productType !== "";
+  const canProceedStep2 = formData.sku !== "" && formData.nameDe !== "";
 
   return (
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/products" className="rounded-lg p-2 hover:bg-gray-100">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Neues Produkt erstellen
-              </h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Schritt {step} von 3
-              </p>
-            </div>
+        <div className="flex items-center gap-4">
+          <Link href="/products" className="rounded-lg p-2 hover:bg-gray-100">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Neues Produkt erstellen</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              {parentId ? `Variante für Produkt ${parentId}` : "Schritt für Schritt"}
+            </p>
           </div>
         </div>
 
-        {/* Step 1: Type Selection */}
-        {step === 1 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Produkttyp auswählen
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              {productTypes.map((pt) => (
-                <button
-                  key={pt.type}
-                  onClick={() => handleTypeSelect(pt.type)}
-                  className="rounded-lg border-2 border-gray-200 p-6 text-left transition-all hover:border-primary-500 hover:bg-primary-50"
-                >
-                  <h3 className="font-semibold text-gray-900">{pt.title}</h3>
-                  <p className="mt-2 text-sm text-gray-600">{pt.description}</p>
-                </button>
-              ))}
+        {/* Progress Stepper */}
+        <div className="flex items-center justify-center space-x-4">
+          {[1, 2, 3].map((s) => (
+            <div key={s} className="flex items-center">
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                  step === s
+                    ? "bg-primary-600 text-white"
+                    : step > s
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-200 text-gray-500"
+                }`}
+              >
+                {step > s ? <Check className="h-5 w-5" /> : s}
+              </div>
+              {s < 3 && (
+                <div
+                  className={`mx-2 h-1 w-16 ${
+                    step > s ? "bg-green-600" : "bg-gray-200"
+                  }`}
+                />
+              )}
             </div>
-          </div>
-        )}
+          ))}
+        </div>
 
-        {/* Step 2: Master Data */}
-        {step === 2 && (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200">
-              <h2 className="mb-6 text-lg font-semibold text-gray-900">
-                Stammdaten
-              </h2>
-
-              <div className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      SKU *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.sku}
-                      onChange={(e) =>
-                        setFormData({ ...formData, sku: e.target.value })
-                      }
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      placeholder="z.B. PROD-001"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Status *
-                    </label>
-                    <select
-                      required
-                      value={formData.status}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          status: e.target.value as "draft" | "active" | "inactive",
-                        })
-                      }
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        {/* Step Content */}
+        <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200">
+          {step === 1 && (
+            <div className="space-y-6">
+              <h2 className="text-lg font-semibold text-gray-900">Schritt 1: Produkttyp wählen</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {["simple", "variant_parent", "variant", "bundle", "parametric"].map((type) => {
+                  const isDisabled = parentId && type !== "variant";
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => !isDisabled && setFormData({ ...formData, productType: type as ProductType })}
+                      disabled={isDisabled}
+                      className={`rounded-lg border-2 p-4 text-left transition-colors ${
+                        formData.productType === type
+                          ? "border-primary-600 bg-primary-50"
+                          : isDisabled
+                          ? "border-gray-200 bg-gray-100 cursor-not-allowed"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
                     >
-                      <option value="draft">Draft</option>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Name (DE) *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.nameDe}
-                      onChange={(e) =>
-                        setFormData({ ...formData, nameDe: e.target.value })
-                      }
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Name (EN)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.nameEn}
-                      onChange={(e) =>
-                        setFormData({ ...formData, nameEn: e.target.value })
-                      }
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Beschreibung (DE)
-                    </label>
-                    <textarea
-                      rows={4}
-                      value={formData.descriptionDe}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          descriptionDe: e.target.value,
-                        })
-                      }
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Beschreibung (EN)
-                    </label>
-                    <textarea
-                      rows={4}
-                      value={formData.descriptionEn}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          descriptionEn: e.target.value,
-                        })
-                      }
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                  </div>
-                </div>
+                      <p className="font-semibold text-gray-900">{type.replace("_", " ")}</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {type === "simple" && "Einfaches Produkt ohne Varianten"}
+                        {type === "variant_parent" && "Produkt mit Varianten (z.B. Farbe, Größe)"}
+                        {type === "variant" && "Kind-Variante eines Varianten-Produkts"}
+                        {type === "bundle" && "Bundle aus mehreren Produkten"}
+                        {type === "parametric" && "Parametrisches Produkt"}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
+          )}
 
-            <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200">
-              <h2 className="mb-6 text-lg font-semibold text-gray-900">
-                Basispreis
-              </h2>
+          {step === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-lg font-semibold text-gray-900">Schritt 2: Stammdaten eingeben</h2>
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    SKU <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    placeholder="z.B. PROD-001"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as ProductStatus })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
 
               <div className="grid gap-6 md:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Preis *
+                    Name (DE) <span className="text-red-600">*</span>
                   </label>
                   <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={formData.basePrice}
-                    onChange={(e) =>
-                      setFormData({ ...formData, basePrice: e.target.value })
-                    }
+                    type="text"
+                    value={formData.nameDe}
+                    onChange={(e) => setFormData({ ...formData, nameDe: e.target.value })}
                     className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    placeholder="0.00"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Währung *
-                  </label>
-                  <select
-                    required
-                    value={formData.currency}
-                    onChange={(e) =>
-                      setFormData({ ...formData, currency: e.target.value })
-                    }
+                  <label className="block text-sm font-medium text-gray-700">Name (EN)</label>
+                  <input
+                    type="text"
+                    value={formData.nameEn}
+                    onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
                     className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  >
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                    <option value="GBP">GBP</option>
-                  </select>
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Beschreibung (DE)</label>
+                  <textarea
+                    value={formData.descriptionDe}
+                    onChange={(e) => setFormData({ ...formData, descriptionDe: e.target.value })}
+                    rows={4}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Beschreibung (EN)</label>
+                  <textarea
+                    value={formData.descriptionEn}
+                    onChange={(e) => setFormData({ ...formData, descriptionEn: e.target.value })}
+                    rows={4}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Hersteller</label>
+                  <input
+                    type="text"
+                    value={formData.manufacturer}
+                    onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Hersteller-Teilenummer</label>
+                  <input
+                    type="text"
+                    value={formData.manufacturerPartNumber}
+                    onChange={(e) => setFormData({ ...formData, manufacturerPartNumber: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
                 </div>
               </div>
             </div>
+          )}
 
-            <div className="flex justify-between">
+          {step === 3 && (
+            <div className="space-y-6">
+              <h2 className="text-lg font-semibold text-gray-900">Schritt 3: Bestätigen & Speichern</h2>
+              <div className="rounded-lg bg-gray-50 p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-700">SKU:</span>
+                    <p className="text-gray-900">{formData.sku}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Typ:</span>
+                    <p className="text-gray-900">{formData.productType}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Status:</span>
+                    <p className="text-gray-900">{formData.status}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Name (DE):</span>
+                    <p className="text-gray-900">{formData.nameDe}</p>
+                  </div>
+                  {formData.nameEn && (
+                    <div>
+                      <span className="font-medium text-gray-700">Name (EN):</span>
+                      <p className="text-gray-900">{formData.nameEn}</p>
+                    </div>
+                  )}
+                  {formData.manufacturer && (
+                    <div>
+                      <span className="font-medium text-gray-700">Hersteller:</span>
+                      <p className="text-gray-900">{formData.manufacturer}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <p className="text-sm text-gray-500">
+                Nach dem Speichern können Sie Preise, Kategorien und Attribute hinzufügen.
+              </p>
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div className="mt-8 flex items-center justify-between border-t pt-6">
+            {step > 1 ? (
               <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                onClick={() => setStep((s) => (s - 1) as Step)}
+                className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
+                <ArrowLeft className="h-4 w-4" />
                 Zurück
               </button>
+            ) : (
+              <div />
+            )}
+
+            {step < 3 ? (
               <button
-                type="submit"
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+                onClick={() => setStep((s) => (s + 1) as Step)}
+                disabled={(step === 1 && !canProceedStep1) || (step === 2 && !canProceedStep2)}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Save className="h-4 w-4" />
-                Produkt erstellen
+                Weiter
+                <ArrowRight className="h-4 w-4" />
               </button>
-            </div>
-          </form>
-        )}
+            ) : (
+              <button
+                onClick={handleCreate}
+                disabled={saving}
+                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? "Speichert..." : "Produkt erstellen"}
+                <Check className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </MainLayout>
   );

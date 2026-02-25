@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, ReactNode } from "react";
+import { useEffect, useState, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/lib/stores/authStore";
 
@@ -12,17 +12,27 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated } = useAuthStore();
+  const [hydrated, setHydrated] = useState(false);
+
+  // Wait for zustand persist hydration
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
-    // Redirect to login if not authenticated and not on login page
+    if (!hydrated) return;
+
     if (!isAuthenticated && pathname !== "/login") {
       router.push("/login");
     }
-    // Redirect to home if authenticated and on login page
     if (isAuthenticated && pathname === "/login") {
       router.push("/");
     }
-  }, [isAuthenticated, pathname, router]);
+  }, [hydrated, isAuthenticated, pathname, router]);
+
+  if (!hydrated) {
+    return null; // or a loading spinner
+  }
 
   return <>{children}</>;
 }

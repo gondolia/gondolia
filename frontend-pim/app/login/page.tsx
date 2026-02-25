@@ -19,9 +19,16 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await pimApiClient.login({ email, password });
-      setAuth(response.user, response.accessToken);
-      router.push("/");
+      // Demo: hardcoded auth (no backend auth service yet)
+      if (email === "admin" && password === "admin") {
+        setAuth(
+          { id: "1", email: "admin@gondolia.local", name: "Admin", role: "admin" },
+          "demo-token"
+        );
+        router.push("/");
+      } else {
+        throw new Error("Ungültige Zugangsdaten");
+      }
     } catch (err: any) {
       setError(err.message || "Login fehlgeschlagen");
     } finally {

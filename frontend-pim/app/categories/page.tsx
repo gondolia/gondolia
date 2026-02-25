@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { MainLayout } from "@/components/MainLayout";
 import { pimApiClient } from "@/lib/api/client";
-import type { Category } from "@/types/catalog";
+import type { Category, Product } from "@/types/catalog";
 import {
   ChevronRight,
   ChevronDown,
@@ -11,29 +11,92 @@ import {
   Edit,
   Trash2,
   FolderTree,
+  Save,
+  X,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editedName, setEditedName] = useState({ de: "", en: "" });
+  const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const fetchCategories = async () => {
+    setLoading(true);
+    try {
+      const data = await pimApiClient.getCategories();
+      setCategories(data);
+    } catch (error) {
+      console.error("Failed to fetch categories:", error);
+      showToast("error", "Fehler beim Laden der Kategorien");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCategoryProducts = async (categoryId: string) => {
+    setLoadingProducts(true);
+    try {
+      const result = await pimApiClient.getProducts({ categoryId, limit: 50 });
+      setCategoryProducts(result.items);
+    } catch (error) {
+      console.error("Failed to fetch category products:", error);
+      showToast("error", "Fehler beim Laden der Produkte");
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      setLoading(true);
-      try {
-        const data = await pimApiClient.getCategories();
-        setCategories(data);
-      } catch (error) {
-        console.error("Failed to fetch categories:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    if (selectedCategory) {
+      setEditedName({ de: selectedCategory.name.de || "", en: selectedCategory.name.en || "" });
+      fetchCategoryProducts(selectedCategory.id);
+    } else {
+      setCategoryProducts([]);
+    }
+  }, [selectedCategory]);
+
+  const handleSaveName = async () => {
+    if (!selectedCategory) return;
+    try {
+      await pimApiClient.updateCategory(selectedCategory.id, { name: editedName });
+      showToast("success", "Name erfolgreich aktualisiert");
+      setEditing(false);
+      await fetchCategories();
+      const updated = await pimApiClient.getCategory(selectedCategory.id);
+      setSelectedCategory(updated);
+    } catch (error: any) {
+      showToast("error", error.message || "Fehler beim Speichern");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedCategory) return;
+    if (!confirm(`Kategorie "${selectedCategory.name.de || selectedCategory.code}" wirklich löschen?`)) return;
+    try {
+      await pimApiClient.deleteCategory(selectedCategory.id);
+      showToast("success", "Kategorie erfolgreich gelöscht");
+      setSelectedCategory(null);
+      await fetchCategories();
+    } catch (error: any) {
+      showToast("error", error.message || "Fehler beim Löschen");
+    }
+  };
 
   const toggleExpand = (id: string) => {
     const newExpanded = new Set(expandedIds);
@@ -103,6 +166,14 @@ export default function CategoriesPage() {
 
   return (
     <MainLayout>
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 rounded-lg px-4 py-3 shadow-lg ${
+          toast.type === "success" ? "bg-green-600" : "bg-red-600"
+        } text-white`}>
+          {toast.message}
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -148,14 +219,44 @@ export default function CategoriesPage() {
                       Kategorie-Details
                     </h2>
                     <div className="flex gap-2">
-                      <button className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                        <Edit className="h-4 w-4" />
-                        Bearbeiten
-                      </button>
-                      <button className="flex items-center gap-2 rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
-                        <Trash2 className="h-4 w-4" />
-                        Löschen
-                      </button>
+                      {editing ? (
+                        <>
+                          <button
+                            onClick={handleSaveName}
+                            className="flex items-center gap-2 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                          >
+                            <Save className="h-4 w-4" />
+                            Speichern
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditing(false);
+                              setEditedName({ de: selectedCategory.name.de || "", en: selectedCategory.name.en || "" });
+                            }}
+                            className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            <X className="h-4 w-4" />
+                            Abbrechen
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setEditing(true)}
+                            className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            <Edit className="h-4 w-4" />
+                            Bearbeiten
+                          </button>
+                          <button
+                            onClick={handleDelete}
+                            className="flex items-center gap-2 rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Löschen
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -173,18 +274,36 @@ export default function CategoriesPage() {
                       <label className="block text-sm font-medium text-gray-700">
                         Name (DE)
                       </label>
-                      <p className="mt-1 text-sm text-gray-900">
-                        {selectedCategory.name.de || "-"}
-                      </p>
+                      {editing ? (
+                        <input
+                          type="text"
+                          value={editedName.de}
+                          onChange={(e) => setEditedName({ ...editedName, de: e.target.value })}
+                          className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        />
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-900">
+                          {selectedCategory.name.de || "-"}
+                        </p>
+                      )}
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700">
                         Name (EN)
                       </label>
-                      <p className="mt-1 text-sm text-gray-900">
-                        {selectedCategory.name.en || "-"}
-                      </p>
+                      {editing ? (
+                        <input
+                          type="text"
+                          value={editedName.en}
+                          onChange={(e) => setEditedName({ ...editedName, en: e.target.value })}
+                          className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        />
+                      ) : (
+                        <p className="mt-1 text-sm text-gray-900">
+                          {selectedCategory.name.en || "-"}
+                        </p>
+                      )}
                     </div>
 
                     {selectedCategory.description && (
@@ -234,6 +353,46 @@ export default function CategoriesPage() {
                         {selectedCategory.sortOrder}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Products in Category */}
+                  <div className="border-t pt-6">
+                    <h3 className="mb-4 text-md font-semibold text-gray-900">
+                      Produkte in dieser Kategorie
+                    </h3>
+                    {loadingProducts ? (
+                      <p className="text-sm text-gray-500">Lädt...</p>
+                    ) : categoryProducts.length === 0 ? (
+                      <p className="text-sm text-gray-500">Keine Produkte in dieser Kategorie</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {categoryProducts.map((product) => (
+                          <Link
+                            key={product.id}
+                            href={`/products/${product.id}`}
+                            className="flex items-center justify-between rounded-lg border border-gray-200 p-3 hover:bg-gray-50"
+                          >
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {product.name.de || product.name.en}
+                              </p>
+                              <p className="text-sm text-gray-500">SKU: {product.sku}</p>
+                            </div>
+                            <span
+                              className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                                product.status === "active"
+                                  ? "bg-green-100 text-green-800"
+                                  : product.status === "inactive"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {product.status}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (

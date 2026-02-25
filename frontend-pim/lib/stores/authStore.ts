@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { PimUser } from "@/types";
 
 interface AuthState {
@@ -9,12 +10,19 @@ interface AuthState {
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  accessToken: null,
-  isAuthenticated: false,
-  setAuth: (user, accessToken) =>
-    set({ user, accessToken, isAuthenticated: true }),
-  logout: () =>
-    set({ user: null, accessToken: null, isAuthenticated: false }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      accessToken: null,
+      isAuthenticated: false,
+      setAuth: (user, accessToken) =>
+        set({ user, accessToken, isAuthenticated: true }),
+      logout: () =>
+        set({ user: null, accessToken: null, isAuthenticated: false }),
+    }),
+    {
+      name: "pim-auth",
+    }
+  )
+);

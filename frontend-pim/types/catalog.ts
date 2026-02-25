@@ -24,6 +24,7 @@ export interface Product {
   currency?: string;
   prices?: PriceScale[];
   // Categories
+  categoryIds?: string[];
   categories?: Category[];
 }
 
@@ -90,6 +91,7 @@ export interface ApiProduct {
   updated_at: string;
   parent_product_id?: string;
   variant_axes?: Record<string, string>;
+  category_ids?: string[];
 }
 
 export interface ApiCategory {
@@ -155,6 +157,7 @@ export function mapApiProduct(api: ApiProduct): Product {
     updatedAt: api.updated_at,
     parentProductId: api.parent_product_id,
     variantAxes: api.variant_axes,
+    categoryIds: api.category_ids || [],
   };
 }
 

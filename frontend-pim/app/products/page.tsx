@@ -26,6 +26,8 @@ export default function ProductsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 20;
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -53,13 +55,71 @@ export default function ProductsPage() {
     fetchProducts();
   }, [searchQuery, filterType, filterStatus, sortBy, sortOrder, page]);
 
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setPage(1); // Reset to first page on search
   };
 
+  const handleChangeStatus = async (productId: string, newStatus: ProductStatus) => {
+    try {
+      await pimApiClient.updateProductStatus(productId, newStatus);
+      showToast("success", "Status erfolgreich geändert");
+      setOpenMenuId(null);
+      // Refresh products
+      const response = await pimApiClient.getProducts({
+        q: searchQuery || undefined,
+        productType: filterType || undefined,
+        status: filterStatus || undefined,
+        sortBy,
+        sortOrder,
+        page,
+        limit,
+      });
+      setProducts(response.items);
+    } catch (error: any) {
+      showToast("error", error.message || "Fehler beim Ändern des Status");
+    }
+  };
+
+  const handleDelete = async (productId: string) => {
+    if (!confirm("Produkt wirklich löschen?")) return;
+    try {
+      await pimApiClient.deleteProduct(productId);
+      showToast("success", "Produkt erfolgreich gelöscht");
+      setOpenMenuId(null);
+      // Refresh products
+      const response = await pimApiClient.getProducts({
+        q: searchQuery || undefined,
+        productType: filterType || undefined,
+        status: filterStatus || undefined,
+        sortBy,
+        sortOrder,
+        page,
+        limit,
+      });
+      setProducts(response.items);
+      setTotalPages(response.totalPages);
+      setTotal(response.total);
+    } catch (error: any) {
+      showToast("error", error.message || "Fehler beim Löschen");
+    }
+  };
+
   return (
     <MainLayout>
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 rounded-lg px-4 py-3 shadow-lg ${
+          toast.type === "success" ? "bg-green-600" : "bg-red-600"
+        } text-white`}>
+          {toast.message}
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -215,10 +275,57 @@ export default function ProductsPage() {
                       <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                         {new Date(product.updatedAt).toLocaleDateString("de-DE")}
                       </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
-                        <button className="text-gray-400 hover:text-gray-600">
+                      <td className="whitespace-nowrap px-6 py-4 text-right text-sm relative">
+                        <button
+                          onClick={() => setOpenMenuId(openMenuId === product.id ? null : product.id)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
                           <MoreVertical className="h-5 w-5" />
                         </button>
+                        {openMenuId === product.id && (
+                          <div className="absolute right-0 top-8 z-10 w-48 rounded-lg bg-white shadow-lg ring-1 ring-gray-200">
+                            <div className="py-1">
+                              <Link
+                                href={`/products/${product.id}`}
+                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                onClick={() => setOpenMenuId(null)}
+                              >
+                                Bearbeiten
+                              </Link>
+                              <div className="border-t border-gray-100">
+                                <button
+                                  onClick={() => handleChangeStatus(product.id, "active")}
+                                  className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                                  disabled={product.status === "active"}
+                                >
+                                  Status: Active
+                                </button>
+                                <button
+                                  onClick={() => handleChangeStatus(product.id, "inactive")}
+                                  className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                                  disabled={product.status === "inactive"}
+                                >
+                                  Status: Inactive
+                                </button>
+                                <button
+                                  onClick={() => handleChangeStatus(product.id, "draft")}
+                                  className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                                  disabled={product.status === "draft"}
+                                >
+                                  Status: Draft
+                                </button>
+                              </div>
+                              <div className="border-t border-gray-100">
+                                <button
+                                  onClick={() => handleDelete(product.id)}
+                                  className="block w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50"
+                                >
+                                  Löschen
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
