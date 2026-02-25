@@ -40,10 +40,17 @@ export function SearchBar() {
       }
 
       try {
-        const response = await apiClient.get<{ hits: SearchSuggestion[] }>(
-          `/api/v1/search?q=${encodeURIComponent(searchQuery)}&limit=5`
+        const response = await apiClient.get<{ data: Array<{ id: string; sku: string; name: Record<string, string>; product_type: string }> }>(
+          `/api/v1/products?search=${encodeURIComponent(searchQuery)}&limit=5`
         );
-        setSuggestions(response.hits || []);
+        setSuggestions(
+          (response.data || []).map((p) => ({
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            product_type: p.product_type,
+          }))
+        );
         setShowSuggestions(true);
       } catch (error) {
         console.error("Failed to fetch suggestions:", error);
