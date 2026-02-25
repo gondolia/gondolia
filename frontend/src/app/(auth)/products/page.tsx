@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api/client";
 import type { Product, Category } from "@/types/catalog";
 import { ProductCard } from "@/components/catalog/ProductCard";
@@ -13,6 +13,7 @@ const PAGE_SIZE = 12;
 
 export default function ProductsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Accumulated product list for load-more
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -168,7 +169,7 @@ export default function ProductsPage() {
       params.delete("q");
     }
     params.delete("page");
-    window.location.href = `/products?${params.toString()}`;
+    router.push(`/products?${params.toString()}`);
   };
 
   const handleTypeFilter = (type: string | undefined) => {
@@ -179,7 +180,7 @@ export default function ProductsPage() {
       params.delete("type");
     }
     params.delete("page");
-    window.location.href = `/products?${params.toString()}`;
+    router.push(`/products?${params.toString()}`);
   };
 
   const typeFilters = [

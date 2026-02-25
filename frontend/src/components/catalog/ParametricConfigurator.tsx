@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import type { VariantAxis, ParametricPricing, ParametricPriceResponse } from "@/types/catalog";
 import { apiClient } from "@/lib/api/client";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
 
 interface ParametricConfiguratorProps {
   productId: string;
@@ -363,20 +364,21 @@ export function ParametricConfigurator({
 
       {/* Add to Cart (hidden in embedded/bundle mode) */}
       {!embedded && (
-      <button
+      <AddToCartButton
+        productId={productId}
+        quantity={quantity}
+        configuration={{
+          parameters,
+          selections,
+        }}
         disabled={!priceResult || isCalculating}
-        className={`
-          w-full py-3 px-6 rounded-lg font-semibold text-sm transition-colors
-          ${priceResult && !isCalculating
-            ? "bg-primary-600 hover:bg-primary-700 text-white shadow-sm focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-            : "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
-          }
-        `}
+        size="lg"
+        className="w-full"
       >
         {priceResult
           ? `In den Warenkorb – ${formatPrice(priceResult.totalPrice)}${priceResult.sku ? ` (${priceResult.sku})` : ""}`
           : "Bitte konfigurieren"}
-      </button>
+      </AddToCartButton>
       )}
     </div>
   );

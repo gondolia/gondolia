@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { BundleComponent, BundlePriceResponse } from "@/types/catalog";
 import { apiClient } from "@/lib/api/client";
 import { ParametricConfigurator } from "./ParametricConfigurator";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
 
 interface BundleConfiguratorProps {
   productId: string;
@@ -52,19 +53,23 @@ export function BundleConfigurator({
   const [error, setError] = useState<string | null>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Validation
-  const validationErrors: Record<string, string> = {};
-  sortedComponents.forEach(comp => {
-    const qty = quantities[comp.componentProductId]?.quantity || 0;
-    if (comp.minQuantity !== undefined && qty < comp.minQuantity) {
-      validationErrors[comp.componentProductId] = `Min. ${comp.minQuantity}`;
-    }
-    if (comp.maxQuantity !== undefined && qty > comp.maxQuantity) {
-      validationErrors[comp.componentProductId] = `Max. ${comp.maxQuantity}`;
-    }
-  });
-
-  const isValid = Object.keys(validationErrors).length === 0;
+  // Validation - memoized to prevent unnecessary recalculation
+  const { validationErrors, isValid } = useMemo(() => {
+    const errors: Record<string, string> = {};
+    sortedComponents.forEach(comp => {
+      const qty = quantities[comp.componentProductId]?.quantity || 0;
+      if (comp.minQuantity !== undefined && qty < comp.minQuantity) {
+        errors[comp.componentProductId] = `Min. ${comp.minQuantity}`;
+      }
+      if (comp.maxQuantity !== undefined && qty > comp.maxQuantity) {
+        errors[comp.componentProductId] = `Max. ${comp.maxQuantity}`;
+      }
+    });
+    return {
+      validationErrors: errors,
+      isValid: Object.keys(errors).length === 0,
+    };
+  }, [sortedComponents, quantities]);
 
   // Debounced price calculation
   const calculatePrice = useCallback(async () => {
@@ -138,12 +143,16 @@ export function BundleConfigurator({
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("de-CH", { style: "currency", currency }).format(price);
 
-  const handleAddToCart = () => {
-    console.log("Add to cart:", {
-      bundleId: productId,
-      quantities,
-      priceResult,
-    });
+  // Prepare cart configuration
+  const getCartConfiguration = () => {
+    return {
+      bundleComponents: Object.values(quantities).map(q => ({
+        componentId: q.componentId,
+        quantity: q.quantity,
+        parameters: q.parameters && Object.keys(q.parameters).length > 0 ? q.parameters : undefined,
+        selections: q.selections && Object.keys(q.selections).length > 0 ? q.selections : undefined,
+      })),
+    };
   };
 
   return (
@@ -381,21 +390,18 @@ export function BundleConfigurator({
       </div>
 
       {/* Add to Cart Button */}
-      <button
-        onClick={handleAddToCart}
+      <AddToCartButton
+        productId={productId}
+        quantity={1}
+        configuration={getCartConfiguration()}
         disabled={!priceResult || isCalculating || !isValid}
-        className={`
-          w-full py-3 px-6 rounded-lg font-semibold text-sm transition-colors
-          ${priceResult && !isCalculating && isValid
-            ? "bg-primary-600 hover:bg-primary-700 text-white shadow-sm focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-            : "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
-          }
-        `}
+        size="lg"
+        className="w-full"
       >
         {priceResult && isValid
           ? `In den Warenkorb – ${formatPrice(priceResult.total)}`
           : "Bitte konfigurieren"}
-      </button>
+      </AddToCartButton>
     </div>
   );
 }

@@ -11,13 +11,16 @@ import { VariantSelector } from "@/components/catalog/VariantSelector";
 import { VariantMatrixView } from "@/components/catalog/VariantMatrixView";
 import { ParametricConfigurator } from "@/components/catalog/ParametricConfigurator";
 import { BundleConfigurator } from "@/components/catalog/BundleConfigurator";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
 import type { BundleComponent } from "@/types/catalog";
+import { useCart } from "@/context/CartContext";
 
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const productId = params.id as string;
+  const { addItem } = useCart();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [priceScales, setPriceScales] = useState<PriceScale[]>([]);
@@ -198,6 +201,22 @@ export default function ProductDetailPage() {
     setSelectedAxisValues(axisValues);
   };
 
+  // Called from VariantMatrixView when user clicks "Alle in den Warenkorb"
+  const handleMatrixAddToCart = async (items: Array<{ variantId: string; sku: string; quantity: number }>) => {
+    try {
+      // Add all items to cart sequentially
+      for (const item of items) {
+        await addItem({
+          productId: item.variantId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to add items to cart:", err);
+    }
+  };
+
   // Resolve a human-readable label for an attribute key.
   // Priority: 1) API translation  2) prettified key (snake_case → Title Case)
   const getAttributeLabel = (key: string): string => {
@@ -211,7 +230,7 @@ export default function ProductDetailPage() {
   const formatPrice = (price: number, currency: string) => {
     return new Intl.NumberFormat("de-CH", {
       style: "currency",
-      currency: currency,
+      currency: currency || "CHF",
     }).format(price);
   };
 
@@ -465,6 +484,7 @@ export default function ProductDetailPage() {
                     variants={product.variants || []}
                     currency={product.currency}
                     unit={product.unit}
+                    onAddToCart={handleMatrixAddToCart}
                     getVariantPrices={(variantId) => apiClient.getProductPrices(variantId)}
                   />
                 )}
@@ -653,9 +673,12 @@ export default function ProductDetailPage() {
                 </div>
               )}
 
-              {/* Add to Cart Button (Placeholder) */}
-              <Button 
-                className="w-full mt-4" 
+              {/* Add to Cart Button */}
+              <AddToCartButton
+                productId={selectedVariant?.id || product.id}
+                variantId={selectedVariant?.id !== product.id ? selectedVariant?.id : undefined}
+                quantity={quantity}
+                className="w-full mt-4"
                 size="lg"
                 disabled={
                   product.productType === 'variant_parent' && !selectedVariant
@@ -665,7 +688,7 @@ export default function ProductDetailPage() {
                   ? 'Bitte Variante wählen'
                   : 'In den Warenkorb'
                 }
-              </Button>
+              </AddToCartButton>
             </PanelBody>
           </Panel>
 
