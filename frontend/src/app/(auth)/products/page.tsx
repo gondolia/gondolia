@@ -199,24 +199,20 @@ export default function ProductsPage() {
         </h1>
       </div>
 
-      {/* Search */}
-      <Panel className="p-4">
-        <form onSubmit={handleSearch} className="flex gap-3">
-          <Input
-            type="search"
-            placeholder="Produkte suchen..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1"
-          />
+      {/* Active search indicator */}
+      {q && (
+        <Panel className="p-4 flex items-center justify-between">
+          <span className="text-gray-700">
+            Suche nach: <strong>{q}</strong>
+          </span>
           <button
-            type="submit"
-            className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors font-medium"
+            onClick={() => router.push("/products")}
+            className="text-sm text-primary-600 hover:text-primary-800"
           >
-            Suchen
+            Suche zurücksetzen
           </button>
-        </form>
-      </Panel>
+        </Panel>
+      )}
 
       {/* Product Type Filter */}
       <div className="flex flex-wrap gap-2">

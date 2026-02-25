@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { apiClient } from "@/lib/api/client";
 import { debounce } from "@/lib/utils";
@@ -15,7 +15,8 @@ interface SearchSuggestion {
 
 export function SearchBar() {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") || "");
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -62,7 +63,7 @@ export function SearchBar() {
     e.preventDefault();
     if (query.trim()) {
       setShowSuggestions(false);
-      router.push(`/search?q=${encodeURIComponent(query)}`);
+      router.push(`/products?q=${encodeURIComponent(query)}`);
     }
   };
 
