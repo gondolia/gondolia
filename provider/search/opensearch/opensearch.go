@@ -458,6 +458,22 @@ func (p *Provider) Search(ctx context.Context, index string, query search.Search
 		searchBody["sort"] = query.Sort
 	}
 
+	// Add aggregations for faceted search
+	searchBody["aggs"] = map[string]any{
+		"categories": map[string]any{
+			"terms": map[string]any{
+				"field": "category_ids",
+				"size":  50,
+			},
+		},
+		"product_types": map[string]any{
+			"terms": map[string]any{
+				"field": "product_type",
+				"size":  10,
+			},
+		},
+	}
+
 	bodyBytes, err := json.Marshal(searchBody)
 	if err != nil {
 		return nil, fmt.Errorf("opensearch: failed to marshal search query: %w", err)
@@ -483,11 +499,33 @@ func (p *Provider) Search(ctx context.Context, index string, query search.Search
 		hits = append(hits, search.Document(doc))
 	}
 
+	// Parse aggregations into facets
+	facets := make(map[string]map[string]int)
+	if len(resp.Aggregations) > 0 {
+		var aggs map[string]json.RawMessage
+		if err := json.Unmarshal(resp.Aggregations, &aggs); err == nil {
+			for aggName, rawAgg := range aggs {
+				var agg struct {
+					Buckets []struct {
+						Key      string `json:"key"`
+						DocCount int    `json:"doc_count"`
+					} `json:"buckets"`
+				}
+				if err := json.Unmarshal(rawAgg, &agg); err == nil && len(agg.Buckets) > 0 {
+					facets[aggName] = make(map[string]int)
+					for _, bucket := range agg.Buckets {
+						facets[aggName][bucket.Key] = bucket.DocCount
+					}
+				}
+			}
+		}
+	}
+
 	return &search.SearchResult{
 		Hits:             hits,
 		TotalHits:        int(resp.Hits.Total.Value),
 		ProcessingTimeMs: resp.Took,
-		Facets:           make(map[string]map[string]int),
+		Facets:           facets,
 	}, nil
 }
 

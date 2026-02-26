@@ -23,6 +23,7 @@ export default function ProductsPage() {
   const [nextOffset, setNextOffset] = useState(0);
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [searchFacets, setSearchFacets] = useState<Record<string, Record<string, number>> | null>(null);
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -49,6 +50,7 @@ export default function ProductsPage() {
     setAllProducts([]);
     setNextOffset(0);
     setTotalProducts(0);
+    setSearchFacets(null);
     setError(null);
     setIsLoading(true);
 
@@ -104,7 +106,13 @@ export default function ProductsPage() {
       const searchRes = await apiClient.get<{
         hits: Array<{ id: string; product_type: string }>;
         total_hits: number;
+        facets?: Record<string, Record<string, number>>;
       }>(`/api/v1/search?q=${encodeURIComponent(searchQ)}${typeFilter ? `&type=${typeFilter}` : ""}&limit=${PAGE_SIZE}&offset=${offset}`);
+
+      // Store facets for category sidebar
+      if (searchRes.facets) {
+        setSearchFacets(searchRes.facets);
+      }
 
       // Fetch full product data for search hits (needed for B2B prices)
       const searchProducts = await Promise.all(
@@ -256,6 +264,7 @@ export default function ProductsPage() {
           <CategorySidebar
             categories={categories}
             selectedCategoryId={categoryId}
+            facetCounts={searchFacets?.categories}
           />
         </div>
 

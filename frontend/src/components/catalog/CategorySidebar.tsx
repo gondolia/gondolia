@@ -10,11 +10,13 @@ import { cn } from "@/lib/utils";
 interface CategorySidebarProps {
   categories: Category[];
   selectedCategoryId?: string;
+  facetCounts?: Record<string, number>;
 }
 
 export function CategorySidebar({
   categories,
   selectedCategoryId,
+  facetCounts,
 }: CategorySidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -65,10 +67,29 @@ export function CategorySidebar({
     return `${pathname}?${params.toString()}`;
   };
 
+  // Get the effective count for a category (facet count during search, static otherwise)
+  const getCategoryCount = (category: Category): number | undefined => {
+    if (facetCounts) {
+      // During search: sum this category's facet count + all children's counts
+      let count = facetCounts[category.id] || 0;
+      if (category.children) {
+        for (const child of category.children) {
+          count += getCategoryCount(child) || 0;
+        }
+      }
+      return count;
+    }
+    return category.productCount;
+  };
+
   const renderCategory = (category: Category, level = 0) => {
     const hasChildren = category.children && category.children.length > 0;
     const isExpanded = expandedCategories.has(category.id);
     const isSelected = category.id === selectedCategoryId;
+    const count = getCategoryCount(category);
+
+    // During search, hide categories with 0 results
+    if (facetCounts && count === 0) return null;
 
     return (
       <div key={category.id}>
@@ -86,9 +107,9 @@ export function CategorySidebar({
             className="flex-1 text-sm"
           >
             {category.name}
-            {category.productCount !== undefined && (
+            {count !== undefined && (
               <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                ({category.productCount})
+                ({count})
               </span>
             )}
           </Link>
