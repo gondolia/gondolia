@@ -121,7 +121,15 @@ export function SearchBar() {
               </div>
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 SKU: {item.sku}
-                {item.product_type && <span className="ml-2">• {item.product_type}</span>}
+                {item.product_type && <span className="ml-2">• {
+                  {
+                    simple: "Einfach",
+                    variant_parent: "Varianten",
+                    variant: "Variante",
+                    parametric: "Parametrisch",
+                    bundle: "Bundle",
+                  }[item.product_type] || item.product_type
+                }</span>}
               </div>
             </button>
           ))}
