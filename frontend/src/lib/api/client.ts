@@ -382,6 +382,19 @@ class ApiClient {
     const response = await this.request<{ data: ApiProduct; parametric_pricing?: any }>(`/api/v1/products/${id}`);
     const { mapApiProduct } = await import("@/types/catalog");
     const product = mapApiProduct(response.data);
+
+    // Enrich with base price from prices endpoint (same as getProducts)
+    try {
+      const prices = await this.getProductPrices(product.id);
+      if (prices.length > 0) {
+        const basePrice = prices.sort((a, b) => a.minQuantity - b.minQuantity)[0];
+        product.basePrice = basePrice.price;
+        product.currency = basePrice.currency;
+      }
+    } catch {
+      // Ignore price fetch errors
+    }
+
     // Attach parametric pricing if present
     if (response.parametric_pricing) {
       const pp = response.parametric_pricing;

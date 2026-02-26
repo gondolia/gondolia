@@ -210,6 +210,35 @@ func (s *VariantService) GetProductWithVariants(ctx context.Context, id uuid.UUI
 				InStock: inStock,
 			}
 		}
+
+		// Compute price range from enriched variant prices
+		var minPrice, maxPrice float64
+		var priceCurrency string
+		priceFound := false
+		for _, v := range product.Variants {
+			if v.Price == nil {
+				continue
+			}
+			if !priceFound || v.Price.Net < minPrice {
+				minPrice = v.Price.Net
+			}
+			if !priceFound || v.Price.Net > maxPrice {
+				maxPrice = v.Price.Net
+			}
+			priceCurrency = v.Price.Currency
+			priceFound = true
+		}
+		if priceFound {
+			product.VariantPriceRange = &domain.PriceRange{
+				Min:      minPrice,
+				Max:      maxPrice,
+				Currency: priceCurrency,
+			}
+		}
+
+		// Variant count
+		count := len(product.Variants)
+		product.VariantCount = &count
 	}
 
 	return product, nil

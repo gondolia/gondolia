@@ -32,7 +32,9 @@ func (s *ProductService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pro
 	if err != nil {
 		return nil, err
 	}
-	if product.ProductType == domain.ProductTypeBundle {
+	if product.ProductType == domain.ProductTypeVariantParent {
+		s.enrichVariantParentListData(ctx, product)
+	} else if product.ProductType == domain.ProductTypeBundle {
 		s.enrichBundleListData(ctx, product)
 	}
 	return product, nil

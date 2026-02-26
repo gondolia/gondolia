@@ -46,7 +46,7 @@ export function SearchBar() {
       try {
         // OpenSearch with multilingual analyzers and fuzzy matching
         const searchRes = await apiClient.get<{ hits: SearchSuggestion[] }>(
-          `/api/v1/search?q=${encodeURIComponent(searchQuery)}&limit=7`
+          `/api/v1/search?q=${encodeURIComponent(searchQuery)}&exclude_type=variant&limit=7`
         );
 
         const hits: SearchSuggestion[] = searchRes.hits || [];

@@ -185,14 +185,14 @@ export function ProductCard({ product }: ProductCardProps) {
 
       {/* Add to Cart Button for simple products - outside Link to prevent nesting */}
       {canAddToCart && (
-        <div className="px-4 pb-4">
+        <Panel className="rounded-t-none border-t-0 px-4 pb-4 pt-0">
           <AddToCartButton
             productId={product.id}
             quantity={1}
             size="sm"
             className="w-full"
           />
-        </div>
+        </Panel>
       )}
     </div>
   );
