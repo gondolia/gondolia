@@ -9,7 +9,11 @@ import { debounce } from "@/lib/utils";
 interface SearchSuggestion {
   id: string;
   sku: string;
-  name: Record<string, string>;
+  name?: Record<string, string>;
+  name_de?: string;
+  name_en?: string;
+  name_fr?: string;
+  name_it?: string;
   product_type?: string;
 }
 
@@ -113,7 +117,7 @@ export function SearchBar() {
               className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
             >
               <div className="font-medium text-gray-900 dark:text-gray-100">
-                {item.name?.de || item.name?.en || "Unbenannt"}
+                {item.name_de || item.name_en || item.name?.de || item.name?.en || "Unbenannt"}
               </div>
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 SKU: {item.sku}
