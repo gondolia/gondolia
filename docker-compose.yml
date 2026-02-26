@@ -44,22 +44,23 @@ services:
       timeout: 3s
       retries: 5
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.12
+  opensearch:
+    image: opensearchproject/opensearch:2.18.0
     restart: unless-stopped
     environment:
-      MEILI_ENV: development
-      MEILI_NO_ANALYTICS: true
-      MEILI_MASTER_KEY: gondolia-dev-key
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=GondoliaSearch1!
+      - OPENSEARCH_JAVA_OPTS=-Xms256m -Xmx256m
     ports:
-      - "7700:7700"
+      - "9200:9200"
     volumes:
-      - meilisearch_data:/meili_data
+      - opensearch_data:/usr/share/opensearch/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
       interval: 10s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 30
 
   identity:
     build:
@@ -111,15 +112,14 @@ services:
       REDIS_PORT: "6379"
       ALLOWED_ORIGINS: "*"
       PIM_PROVIDER: mock
-      SEARCH_PROVIDER: meilisearch
-      MEILI_HOST: http://meilisearch:7700
-      MEILI_API_KEY: gondolia-dev-key
+      SEARCH_PROVIDER: opensearch
+      OPENSEARCH_URL: http://opensearch:9200
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      meilisearch:
+      opensearch:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
@@ -236,6 +236,6 @@ services:
 
 volumes:
   postgres_data:
-  meilisearch_data:
+  opensearch_data:
   frontend_node_modules:
   pim_node_modules:

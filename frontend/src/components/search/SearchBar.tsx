@@ -40,26 +40,14 @@ export function SearchBar() {
       }
 
       try {
-        // Search both engines: Meilisearch (typo-tolerant) + DB ILIKE (substring/compound words)
-        const [meiliRes, dbRes] = await Promise.allSettled([
-          apiClient.get<{ hits: SearchSuggestion[] }>(
-            `/api/v1/search?q=${encodeURIComponent(searchQuery)}&limit=5`
-          ),
-          apiClient.get<{ data: Array<{ id: string; sku: string; name: Record<string, string>; product_type: string }> }>(
-            `/api/v1/products?search=${encodeURIComponent(searchQuery)}&limit=5`
-          ),
-        ]);
+        // OpenSearch with multilingual analyzers and fuzzy matching
+        const searchRes = await apiClient.get<{ hits: SearchSuggestion[] }>(
+          `/api/v1/search?q=${encodeURIComponent(searchQuery)}&limit=7`
+        );
 
-        const meiliHits: SearchSuggestion[] = meiliRes.status === "fulfilled" ? (meiliRes.value.hits || []) : [];
-        const dbHits: SearchSuggestion[] = dbRes.status === "fulfilled"
-          ? (dbRes.value.data || []).map((p) => ({ id: p.id, sku: p.sku, name: p.name, product_type: p.product_type }))
-          : [];
+        const hits: SearchSuggestion[] = searchRes.hits || [];
 
-        // Merge: Meilisearch first (better relevance), then DB hits not already in Meilisearch
-        const seen = new Set(meiliHits.map((h) => h.id));
-        const merged = [...meiliHits, ...dbHits.filter((h) => !seen.has(h.id))].slice(0, 7);
-        
-        setSuggestions(merged);
+        setSuggestions(hits);
         setShowSuggestions(true);
       } catch (error) {
         console.error("Failed to fetch suggestions:", error);

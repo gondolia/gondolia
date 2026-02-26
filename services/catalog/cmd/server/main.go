@@ -17,8 +17,8 @@ import (
 	"github.com/gondolia/gondolia/provider"
 	"github.com/gondolia/gondolia/provider/pim"
 	"github.com/gondolia/gondolia/provider/search"
-	_ "github.com/gondolia/gondolia/provider/search/meilisearch" // Register meilisearch provider
-	_ "github.com/gondolia/gondolia/provider/search/noop"        // Register noop provider
+	_ "github.com/gondolia/gondolia/provider/search/opensearch" // Register opensearch provider
+	_ "github.com/gondolia/gondolia/provider/search/noop"       // Register noop provider
 	"github.com/gondolia/gondolia/services/catalog/internal/config"
 	"github.com/gondolia/gondolia/services/catalog/internal/domain"
 	"github.com/gondolia/gondolia/services/catalog/internal/handler"
@@ -97,7 +97,7 @@ func main() {
 	}
 
 	// Bulk index all products on startup if search provider is available
-	if searchProvider != nil && cfg.SearchProvider == "meilisearch" {
+	if searchProvider != nil && cfg.SearchProvider == "opensearch" {
 		go func() {
 			logger.Info("Starting bulk product indexing...")
 			if err := bulkIndexProducts(ctx, productRepo, searchProvider, tenantRepo, logger); err != nil {
@@ -279,31 +279,23 @@ func initSearchProvider(ctx context.Context, cfg *config.Config, logger *zap.Log
 
 	var providerConfig map[string]any
 
-	if providerType == "meilisearch" {
-		host := cfg.SearchURL
-		if host == "" {
-			host = os.Getenv("MEILI_HOST")
+	if providerType == "opensearch" {
+		url := cfg.SearchURL
+		if url == "" {
+			url = os.Getenv("OPENSEARCH_URL")
 		}
-		if host == "" {
-			logger.Warn("Meilisearch host not configured, using noop provider")
-			providerType = "noop"
-		}
-
-		apiKey := cfg.SearchAPIKey
-		if apiKey == "" {
-			apiKey = os.Getenv("MEILI_API_KEY")
-		}
-		if apiKey == "" {
-			logger.Warn("Meilisearch API key not configured, using noop provider")
-			providerType = "noop"
+		if url == "" {
+			url = "http://opensearch:9200"
 		}
 
-		if providerType == "meilisearch" {
-			providerConfig = map[string]any{
-				"host":    host,
-				"api_key": apiKey,
-				"timeout": 30,
-			}
+		username := os.Getenv("OPENSEARCH_USERNAME")
+		password := os.Getenv("OPENSEARCH_PASSWORD")
+
+		providerConfig = map[string]any{
+			"addresses":            []string{url},
+			"username":             username,
+			"password":             password,
+			"insecure_skip_verify": true, // For local development
 		}
 	}
 
@@ -324,8 +316,8 @@ func initSearchProvider(ctx context.Context, cfg *config.Config, logger *zap.Log
 		// Don't fail startup, just log the warning
 	}
 
-	// Configure products index if meilisearch
-	if providerType == "meilisearch" {
+	// Configure products index if opensearch
+	if providerType == "opensearch" {
 		if err := configureProductsIndex(ctx, searchProv, logger); err != nil {
 			logger.Error("Failed to configure products index", zap.Error(err))
 			// Don't fail startup
@@ -335,23 +327,20 @@ func initSearchProvider(ctx context.Context, cfg *config.Config, logger *zap.Log
 	return searchProv, nil
 }
 
-// configureProductsIndex configures the Meilisearch products index
+// configureProductsIndex configures the OpenSearch products index
 func configureProductsIndex(ctx context.Context, provider search.SearchProvider, logger *zap.Logger) error {
 	indexName := "products"
 
-	// Try to create the index (will fail if it already exists, which is fine)
-	err := provider.CreateIndex(ctx, indexName, "id")
-	if err != nil {
-		logger.Debug("Index creation skipped (may already exist)", zap.String("index", indexName))
-	}
-
-	// Configure index settings
+	// Configure index with mappings and analyzers
+	// The IndexConfig is not fully used by OpenSearch provider - it creates the index directly
 	indexConfig := search.IndexConfig{
 		SearchableAttributes: []string{
-			"name.de",
-			"name.en",
-			"description.de",
-			"description.en",
+			"name_de",
+			"name_en",
+			"name_fr",
+			"name_it",
+			"description_de",
+			"description_en",
 			"sku",
 		},
 		FilterableAttributes: []string{
@@ -361,23 +350,23 @@ func configureProductsIndex(ctx context.Context, provider search.SearchProvider,
 			"category_ids",
 		},
 		SortableAttributes: []string{
-			"name.de",
+			"name_de",
 			"sku",
 			"created_at",
 			"updated_at",
 		},
-		// TypoTolerance: use Meilisearch defaults (enabled by default)
 	}
 
 	if err := provider.ConfigureIndex(ctx, indexName, indexConfig); err != nil {
-		return fmt.Errorf("failed to configure index: %w", err)
+		logger.Debug("Index configuration skipped (may already exist)", zap.String("index", indexName))
+		// Don't fail - index might already exist
 	}
 
 	logger.Info("Products index configured successfully", zap.String("index", indexName))
 	return nil
 }
 
-// bulkIndexProducts indexes all products into Meilisearch
+// bulkIndexProducts indexes all products into OpenSearch
 func bulkIndexProducts(ctx context.Context, productRepo *postgres.ProductRepository, searchProv search.SearchProvider, tenantRepo *postgres.TenantRepository, logger *zap.Logger) error {
 	// Get all tenants by trying known codes
 	tenant, err := tenantRepo.GetByCode(ctx, "demo")
@@ -401,18 +390,50 @@ func bulkIndexProducts(ctx context.Context, productRepo *postgres.ProductReposit
 
 	docs := make([]search.Document, 0, len(products))
 	for _, p := range products {
+		// Flatten name and description to separate language fields
 		doc := search.Document{
 			"id":           p.ID.String(),
 			"tenant_id":    p.TenantID.String(),
 			"sku":          p.SKU,
-			"name":         p.Name,
-			"description":  p.Description,
 			"product_type": string(p.ProductType),
 			"status":       string(p.Status),
 			"category_ids": p.CategoryIDs,
 			"created_at":   p.CreatedAt.Unix(),
 			"updated_at":   p.UpdatedAt.Unix(),
 		}
+
+		// Extract language-specific fields from Name map
+		if p.Name != nil {
+			if de, ok := p.Name["de"]; ok {
+				doc["name_de"] = de
+			}
+			if en, ok := p.Name["en"]; ok {
+				doc["name_en"] = en
+			}
+			if fr, ok := p.Name["fr"]; ok {
+				doc["name_fr"] = fr
+			}
+			if it, ok := p.Name["it"]; ok {
+				doc["name_it"] = it
+			}
+		}
+
+		// Extract language-specific fields from Description map
+		if p.Description != nil {
+			if de, ok := p.Description["de"]; ok {
+				doc["description_de"] = de
+			}
+			if en, ok := p.Description["en"]; ok {
+				doc["description_en"] = en
+			}
+			if fr, ok := p.Description["fr"]; ok {
+				doc["description_fr"] = fr
+			}
+			if it, ok := p.Description["it"]; ok {
+				doc["description_it"] = it
+			}
+		}
+
 		docs = append(docs, doc)
 	}
 

@@ -100,43 +100,20 @@ export default function ProductsPage() {
         includeChildren: true, // Backend handles subcategories server-side
       });
     } else if (searchQ) {
-      // Hybrid search: Meilisearch (typo-tolerant) + DB ILIKE (compound words)
-      const [meiliRes, dbRes] = await Promise.allSettled([
-        apiClient.get<{
-          hits: Array<{ id: string; product_type: string }>;
-          total_hits: number;
-        }>(`/api/v1/search?q=${encodeURIComponent(searchQ)}${typeFilter ? `&type=${typeFilter}` : ""}&limit=${PAGE_SIZE}&offset=${offset}`),
-        apiClient.getProducts({
-          q: searchQ,
-          productType: typeFilter,
-          limit: PAGE_SIZE,
-          offset,
-        }),
-      ]);
+      // OpenSearch with multilingual analyzers and fuzzy matching
+      const searchRes = await apiClient.get<{
+        hits: Array<{ id: string; product_type: string }>;
+        total_hits: number;
+      }>(`/api/v1/search?q=${encodeURIComponent(searchQ)}${typeFilter ? `&type=${typeFilter}` : ""}&limit=${PAGE_SIZE}&offset=${offset}`);
 
-      // Collect IDs from Meilisearch hits
-      const meiliIds = meiliRes.status === "fulfilled" ? meiliRes.value.hits.map((h) => h.id) : [];
-      const dbItems = dbRes.status === "fulfilled" ? dbRes.value.items : [];
-      const dbTotal = dbRes.status === "fulfilled" ? dbRes.value.total : 0;
-
-      // Fetch full product data for Meilisearch hits
-      const meiliProducts = await Promise.all(
-        meiliIds.map((id) => apiClient.getProduct(id).catch(() => null))
+      // Fetch full product data for search hits (needed for B2B prices)
+      const searchProducts = await Promise.all(
+        searchRes.hits.map((h) => apiClient.getProduct(h.id).catch(() => null))
       );
 
-      // Merge: Meilisearch first (relevance-sorted), then DB results not already present
-      const seen = new Set(meiliIds);
-      const merged = [
-        ...meiliProducts.filter(Boolean),
-        ...dbItems.filter((p: any) => !seen.has(p.id)),
-      ];
-
       data = {
-        items: merged as any[],
-        total: Math.max(
-          meiliRes.status === "fulfilled" ? meiliRes.value.total_hits : 0,
-          dbTotal
-        ),
+        items: searchProducts.filter(Boolean) as any[],
+        total: searchRes.total_hits,
       };
     } else {
       data = await apiClient.getProducts({
