@@ -37,6 +37,9 @@ func (h *SearchHandler) Search(c *gin.Context) {
 	if productType := c.Query("type"); productType != "" {
 		filters["product_type"] = productType
 	}
+	if excludeType := c.Query("exclude_type"); excludeType != "" {
+		filters["exclude_product_type"] = excludeType
+	}
 	if category := c.Query("category"); category != "" {
 		filters["category_ids"] = category
 	}

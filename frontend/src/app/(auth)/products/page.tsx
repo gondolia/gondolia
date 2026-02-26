@@ -107,7 +107,7 @@ export default function ProductsPage() {
         hits: Array<{ id: string; product_type: string }>;
         total_hits: number;
         facets?: Record<string, Record<string, number>>;
-      }>(`/api/v1/search?q=${encodeURIComponent(searchQ)}${typeFilter ? `&type=${typeFilter}` : ""}&limit=${PAGE_SIZE}&offset=${offset}`);
+      }>(`/api/v1/search?q=${encodeURIComponent(searchQ)}${typeFilter ? `&type=${typeFilter}` : ""}&exclude_type=variant&limit=${PAGE_SIZE}&offset=${offset}`);
 
       // Store facets for category sidebar
       if (searchRes.facets) {

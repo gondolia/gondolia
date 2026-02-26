@@ -39,11 +39,19 @@ func (s *SearchService) Search(ctx context.Context, tenantID uuid.UUID, query st
 
 	// Add additional filters
 	for field, value := range filters {
-		searchQuery.Filters = append(searchQuery.Filters, search.Filter{
-			Field:    field,
-			Operator: "=",
-			Value:    value,
-		})
+		if field == "exclude_product_type" {
+			searchQuery.Filters = append(searchQuery.Filters, search.Filter{
+				Field:    "product_type",
+				Operator: "!=",
+				Value:    value,
+			})
+		} else {
+			searchQuery.Filters = append(searchQuery.Filters, search.Filter{
+				Field:    field,
+				Operator: "=",
+				Value:    value,
+			})
+		}
 	}
 
 	result, err := s.searchProvider.Search(ctx, "products", searchQuery)
