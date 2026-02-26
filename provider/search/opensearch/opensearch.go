@@ -409,11 +409,12 @@ func (p *Provider) Search(ctx context.Context, index string, query search.Search
 						"fields": []string{"name_de.prefix^10", "name_en.prefix^5", "name_fr.prefix^3", "name_it.prefix^3"},
 						"type":   "best_fields",
 					}},
-					// Analyzed match (decompounder, stemming) — for complete words
+					// Analyzed match (decompounder, stemming) — for complete words, with typo tolerance
 					{"multi_match": map[string]any{
-						"query":  query.Query,
-						"fields": []string{"name_de^3", "name_en^2", "name_fr", "name_it", "description_de", "description_en"},
-						"type":   "best_fields",
+						"query":     query.Query,
+						"fields":    []string{"name_de^3", "name_en^2", "name_fr", "name_it", "description_de", "description_en"},
+						"type":      "best_fields",
+						"fuzziness": "AUTO:4,7",
 					}},
 					// SKU match
 					{"match": map[string]any{
