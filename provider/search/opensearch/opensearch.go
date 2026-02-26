@@ -246,10 +246,34 @@ func (p *Provider) ConfigureIndex(ctx context.Context, index string, config sear
 	// Create index with mappings and settings
 	mappings := map[string]any{
 		"properties": map[string]any{
-			"name_de":       map[string]any{"type": "text", "analyzer": "german"},
-			"name_en":       map[string]any{"type": "text", "analyzer": "english"},
-			"name_fr":       map[string]any{"type": "text", "analyzer": "french"},
-			"name_it":       map[string]any{"type": "text", "analyzer": "italian"},
+			"name_de": map[string]any{
+				"type":     "text",
+				"analyzer": "german",
+				"fields": map[string]any{
+					"prefix": map[string]any{"type": "text", "analyzer": "autocomplete", "search_analyzer": "autocomplete_search"},
+				},
+			},
+			"name_en": map[string]any{
+				"type":     "text",
+				"analyzer": "english",
+				"fields": map[string]any{
+					"prefix": map[string]any{"type": "text", "analyzer": "autocomplete", "search_analyzer": "autocomplete_search"},
+				},
+			},
+			"name_fr": map[string]any{
+				"type":     "text",
+				"analyzer": "french",
+				"fields": map[string]any{
+					"prefix": map[string]any{"type": "text", "analyzer": "autocomplete", "search_analyzer": "autocomplete_search"},
+				},
+			},
+			"name_it": map[string]any{
+				"type":     "text",
+				"analyzer": "italian",
+				"fields": map[string]any{
+					"prefix": map[string]any{"type": "text", "analyzer": "autocomplete", "search_analyzer": "autocomplete_search"},
+				},
+			},
 			"description_de": map[string]any{"type": "text", "analyzer": "german"},
 			"description_en": map[string]any{"type": "text", "analyzer": "english"},
 			"sku": map[string]any{
@@ -304,8 +328,23 @@ func (p *Provider) ConfigureIndex(ctx context.Context, index string, config sear
 					"type":     "stemmer",
 					"language": "light_english",
 				},
+				"autocomplete_filter": map[string]any{
+					"type":     "edge_ngram",
+					"min_gram": 2,
+					"max_gram": 20,
+				},
 			},
 			"analyzer": map[string]any{
+				"autocomplete": map[string]any{
+					"type":      "custom",
+					"tokenizer": "standard",
+					"filter":    []string{"lowercase", "autocomplete_filter"},
+				},
+				"autocomplete_search": map[string]any{
+					"type":      "custom",
+					"tokenizer": "standard",
+					"filter":    []string{"lowercase"},
+				},
 				"german": map[string]any{
 					"type":      "custom",
 					"tokenizer": "standard",
@@ -356,20 +395,32 @@ func (p *Provider) Search(ctx context.Context, index string, query search.Search
 	var queryObj map[string]any
 
 	if query.Query != "" {
+		// Combined query strategy:
+		// 1. Prefix match on autocomplete subfields (highest boost — for suggestions/typeahead)
+		// 2. Analyzed match on language fields with decompounder (for full-word search)
+		// 3. SKU search
+		// No fuzziness to avoid false positives (e.g., "Leder" → "LED")
 		queryObj = map[string]any{
-			"multi_match": map[string]any{
-				"query": query.Query,
-				"fields": []string{
-					"name_de^3",
-					"name_en^2",
-					"name_fr",
-					"name_it",
-					"description_de",
-					"description_en",
-					"sku.search",
+			"bool": map[string]any{
+				"should": []map[string]any{
+					// Prefix matching (autocomplete) — highest priority
+					{"multi_match": map[string]any{
+						"query":  query.Query,
+						"fields": []string{"name_de.prefix^10", "name_en.prefix^5", "name_fr.prefix^3", "name_it.prefix^3"},
+						"type":   "best_fields",
+					}},
+					// Analyzed match (decompounder, stemming) — for complete words
+					{"multi_match": map[string]any{
+						"query":  query.Query,
+						"fields": []string{"name_de^3", "name_en^2", "name_fr", "name_it", "description_de", "description_en"},
+						"type":   "best_fields",
+					}},
+					// SKU match
+					{"match": map[string]any{
+						"sku.search": map[string]any{"query": query.Query, "boost": 2},
+					}},
 				},
-				"type":      "best_fields",
-				"fuzziness": "AUTO",
+				"minimum_should_match": 1,
 			},
 		}
 	} else {
