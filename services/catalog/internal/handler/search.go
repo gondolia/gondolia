@@ -41,7 +41,15 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		filters["exclude_product_type"] = excludeType
 	}
 	if category := c.Query("category"); category != "" {
-		filters["category_ids"] = category
+		// Collect category + all descendant IDs for hierarchical filtering
+		categoryIDs := []string{category}
+		if h.searchService != nil {
+			if descendants, err := h.searchService.GetCategoryDescendantIDs(c.Request.Context(), tenantID, category); err == nil {
+				categoryIDs = append(categoryIDs, descendants...)
+			}
+		}
+		filters["category_ids"] = categoryIDs
+		// Debug: log category IDs
 	}
 
 	// Pagination

@@ -6,18 +6,59 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gondolia/gondolia/provider/search"
+	"github.com/gondolia/gondolia/services/catalog/internal/domain"
+	"github.com/gondolia/gondolia/services/catalog/internal/repository"
 )
 
 // SearchService handles product search operations
 type SearchService struct {
 	searchProvider search.SearchProvider
+	categoryRepo   repository.CategoryRepository
 }
 
 // NewSearchService creates a new search service
-func NewSearchService(searchProvider search.SearchProvider) *SearchService {
+func NewSearchService(searchProvider search.SearchProvider, categoryRepo repository.CategoryRepository) *SearchService {
 	return &SearchService{
 		searchProvider: searchProvider,
+		categoryRepo:   categoryRepo,
 	}
+}
+
+// GetCategoryDescendantIDs returns all descendant category IDs for a given category
+func (s *SearchService) GetCategoryDescendantIDs(ctx context.Context, tenantID uuid.UUID, categoryID string) ([]string, error) {
+	catUUID, err := uuid.Parse(categoryID)
+	if err != nil {
+		return nil, err
+	}
+	// Use List with parent filter to find direct children, then recurse
+	// Simpler: query all categories and find descendants in memory
+	filter := domain.CategoryFilter{
+		TenantID: tenantID,
+		Limit:    1000,
+	}
+	cats, _, err := s.categoryRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	// Build parent->children map
+	childMap := make(map[uuid.UUID][]uuid.UUID)
+	for _, cat := range cats {
+		if cat.ParentID != nil {
+			childMap[*cat.ParentID] = append(childMap[*cat.ParentID], cat.ID)
+		}
+	}
+	// BFS to collect all descendants
+	var ids []string
+	queue := []uuid.UUID{catUUID}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, childID := range childMap[current] {
+			ids = append(ids, childID.String())
+			queue = append(queue, childID)
+		}
+	}
+	return ids, nil
 }
 
 // Search searches for products

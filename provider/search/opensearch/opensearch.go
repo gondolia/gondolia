@@ -598,10 +598,20 @@ func (p *Provider) Metadata() search.Metadata {
 func buildOpenSearchFilter(f search.Filter) map[string]any {
 	switch f.Operator {
 	case "=":
-		return map[string]any{
-			"term": map[string]any{
-				f.Field: f.Value,
-			},
+		// Use "terms" for slice values (e.g., category hierarchy), "term" for single values
+		switch v := f.Value.(type) {
+		case []string:
+			return map[string]any{
+				"terms": map[string]any{
+					f.Field: v,
+				},
+			}
+		default:
+			return map[string]any{
+				"term": map[string]any{
+					f.Field: f.Value,
+				},
+			}
 		}
 	case "!=":
 		return map[string]any{

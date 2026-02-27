@@ -89,11 +89,11 @@ func main() {
 
 	if pimProvider != nil && searchProvider != nil {
 		syncService = service.NewSyncService(productRepo, categoryRepo, pimProvider, searchProvider)
-		searchService = service.NewSearchService(searchProvider)
+		searchService = service.NewSearchService(searchProvider, categoryRepo)
 	} else if searchProvider != nil {
 		// Create a minimal sync service for search indexing only
 		syncService = service.NewSyncService(productRepo, categoryRepo, nil, searchProvider)
-		searchService = service.NewSearchService(searchProvider)
+		searchService = service.NewSearchService(searchProvider, categoryRepo)
 	}
 
 	// Bulk index all products on startup if search provider is available
