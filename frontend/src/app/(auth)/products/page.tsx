@@ -95,19 +95,13 @@ export default function ProductsPage() {
     searchQ: string | undefined
   ) => {
     let data;
-    if (catId) {
-      data = await apiClient.getCategoryProducts(catId, {
-        limit: PAGE_SIZE,
-        offset,
-        includeChildren: true, // Backend handles subcategories server-side
-      });
-    } else if (searchQ) {
-      // OpenSearch with multilingual analyzers and fuzzy matching
+    if (searchQ) {
+      // OpenSearch: category filter narrows search results when both q and category are set
       const searchRes = await apiClient.get<{
         hits: Array<{ id: string; product_type: string }>;
         total_hits: number;
         facets?: Record<string, Record<string, number>>;
-      }>(`/api/v1/search?q=${encodeURIComponent(searchQ)}${typeFilter ? `&type=${typeFilter}` : ""}&exclude_type=variant&limit=${PAGE_SIZE}&offset=${offset}`);
+      }>(`/api/v1/search?q=${encodeURIComponent(searchQ)}${catId ? `&category=${catId}` : ""}${typeFilter ? `&type=${typeFilter}` : ""}&exclude_type=variant&limit=${PAGE_SIZE}&offset=${offset}`);
 
       // Store facets for category sidebar
       if (searchRes.facets) {
@@ -123,6 +117,12 @@ export default function ProductsPage() {
         items: searchProducts.filter(Boolean) as any[],
         total: searchRes.total_hits,
       };
+    } else if (catId) {
+      data = await apiClient.getCategoryProducts(catId, {
+        limit: PAGE_SIZE,
+        offset,
+        includeChildren: true,
+      });
     } else {
       data = await apiClient.getProducts({
         productType: typeFilter,
