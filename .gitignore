@@ -72,6 +72,7 @@ docker-compose.override.yml
 # Build binaries
 migrate
 server
+
 docs/architecture/
 @eaDir/
 frontend/public/images/
